@@ -15,6 +15,6 @@ and D. Giannakis. Please cite using the BibTex entry.
         MRCLASS = {58A15 (58A10)},
         MRNUMBER = {4069764},
         MRREVIEWER = {Veronika Chrastinov\'{a}},
-          DOI = {10.1002/cpa.21885},
-          URL = {https://doi.org/10.1002/cpa.21885},
+        DOI = {10.1002/cpa.21885},
+        URL = {https://doi.org/10.1002/cpa.21885},
     }
