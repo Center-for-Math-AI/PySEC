@@ -1,6 +1,6 @@
 This is the official python implementation of Spectral Exterior Calculus (SEC).
 The code is based on the article "Spectral exterior calculus" by T. Berry
-and D. Giannakis. Please cite using the BibTex entry.
+and D. Giannakis. Please cite using the BibTex entry below.
 
     @article {MR4069764,
         AUTHOR = {Berry, Tyrus and Giannakis, Dimitrios},
