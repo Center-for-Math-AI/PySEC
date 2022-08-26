@@ -1,0 +1,10 @@
+# python temp files
+__pycache__/
+
+# vi temp files
+*~
+*.swp
+
+# IDE specific files
+.idea
+

@@ -18,3 +18,7 @@ and D. Giannakis. Please cite using the BibTex entry below.
         DOI = {10.1002/cpa.21885},
         URL = {https://doi.org/10.1002/cpa.21885},
     }
+
+### Dependencies
+
+`torch scipy pytest`
