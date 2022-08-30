@@ -1,5 +1,5 @@
 # to install in develop mode:> python setup.py develop
-# to uninstall:> python setup.py --uninstall
+# to uninstall:> python setup.py develop --uninstall
 from setuptools import setup
 
 with open("README.md", 'r') as f:
