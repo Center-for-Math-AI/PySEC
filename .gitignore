@@ -1,5 +1,6 @@
 # python temp files
 __pycache__/
+*.egg-info/
 
 # vi temp files
 *~
