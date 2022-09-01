@@ -1,5 +1,8 @@
 import torch
+import numpy as np
 from PySEC.distance_funcs import *
+from PySEC.sec_utils import reshape_fortran, get_degen_patt
+from PySEC.generate_data import laplacian_eig_truth
 import scipy.spatial.distance as sdist
 from sklearn.neighbors import NearestNeighbors
 
@@ -93,3 +96,28 @@ def test_knn_expensive():
     assert dxy.shape == dxys.shape
     assert torch.allclose(dxy, dxys, atol=atol, rtol=rtol)
     assert torch.allclose(dxi, dxsi, atol=atol, rtol=rtol)
+
+
+def test_reshape_fortran():
+    x = torch.arange(0, 60, 2, dtype=torch.float64).reshape((5,2,3)) * 1.0
+    x *= x / 3  # non-equal spacing and not perfect binary
+
+    x2 = reshape_fortran(x, [5, 2, 3])
+    x3 = np.reshape(x.numpy(), [5, 2, 3], order='F')
+    assert torch.allclose(x2.cpu(), torch.tensor(x3, dtype=torch.float64), atol=0, rtol=0)
+
+
+def test_get_degen_patt():
+
+    data = laplacian_eig_truth(1)
+    dpatt, davg, dstd = get_degen_patt(data)
+    assert torch.allclose(torch.tensor(dpatt), torch.tensor([1]))
+    data = laplacian_eig_truth(2)
+    dpatt, davg, dstd = get_degen_patt(data)
+    assert torch.allclose(torch.tensor(dpatt), torch.tensor([1,1]))
+    data = laplacian_eig_truth(3)
+    dpatt, davg, dstd = get_degen_patt(data)
+    assert torch.allclose(torch.tensor(dpatt), torch.tensor([1,2]))
+    data = laplacian_eig_truth(6)
+    dpatt, davg, dstd = get_degen_patt(data)
+    assert torch.allclose(torch.tensor(dpatt), torch.tensor([1,2,2,1]))

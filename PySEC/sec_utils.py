@@ -78,17 +78,24 @@ def get_degen_patt(vals, atol=1.0e-8, rtol=1.0e-6):
             if abs(dlist[0] - val) < rtol * max(abs(dlist[0]), abs(val)) + atol:
                 dlist.append(val)
             else:
-                ndlist = np.array(dlist)
+                ndlist = torch.as_tensor(dlist)
                 degen_patts.append(len(dlist))
                 averages.append(ndlist.mean())
-                std_devs.append(ndlist.std())
+                std_devs.append(ndlist.std(unbiased=False))
                 dlist = [val]
+
+        # now do the last list
+        ndlist = torch.as_tensor(dlist)
+        degen_patts.append(len(dlist))
+        averages.append(ndlist.mean())
+        std_devs.append(ndlist.std(unbiased=False))
 
     return degen_patts, averages, std_devs
 # end def get_degen_patt(vals, degen_tol):
 
 
-def compare_eigenpairs(val1, vec1, val2, vec2, atol=1.0e-8, rtol=1.0e-6, verbose=False):
+def compare_eigenpairs(val1, vec1, val2, vec2, atol=1.0e-8, rtol=1.0e-6,
+                       verbose=False, skip_last=1):
     """
     compare two eigen decomps and handle degenerate subspaces by checking if
     one subspace can be fully represented by the other subspace
@@ -98,6 +105,8 @@ def compare_eigenpairs(val1, vec1, val2, vec2, atol=1.0e-8, rtol=1.0e-6, verbose
     :param vec2: vector of eigenvectors (matrix), assume orthonormal
     :param atol: absolute tolerance for torch.allclose
     :param rtol: relative tolerance for torch.allclose
+    :param verbose: whether to fail silently or with message
+    :param skip_last: how many of the vectors to skip comparing at the end
     :return: boolean
     """
 
@@ -113,11 +122,13 @@ def compare_eigenpairs(val1, vec1, val2, vec2, atol=1.0e-8, rtol=1.0e-6, verbose
         return False
 
     # now assume the same degeneracy pattern of the two decomps and find val1
-    # degen_patt, degen_avg, degen_std = get_degen_patt(val1, atol=atol*1.e-4, rtol=rtol*1.e-2)
-    degen_patt, degen_avg, degen_std = get_degen_patt(val1, atol=atol, rtol=rtol)
-
+    if isinstance(skip_last, int) and skip_last > 0:
+        degen_patt, degen_avg, degen_std = get_degen_patt(val1[:-skip_last],
+                                                          atol=atol, rtol=rtol)
+    else:
+        degen_patt, degen_avg, degen_std = get_degen_patt(val1,
+                                                          atol=atol, rtol=rtol)
     iv = 0
-    # rets = [None,] * len(degen_patt) # debug
     for ip, patt in enumerate(degen_patt):
         # due to degeneracy, and eigenvector phase indeterminacy compare with QR
         ss = slice(iv, iv + patt)
@@ -146,6 +157,7 @@ def compare_eigenpairs(val1, vec1, val2, vec2, atol=1.0e-8, rtol=1.0e-6, verbose
 
 def estimate_dimension(d, epsilon, diagonals=None):
 
+    device = d.device
     if diagonals is None:
         diagonals = 1
 
@@ -160,10 +172,10 @@ def estimate_dimension(d, epsilon, diagonals=None):
     ds1 = torch.exp(-dsum[dsum > 1.0e-6] / (2 * epsilon * opdx)).sum() + N * diagonals
     ds2 = torch.exp(-dsum[dsum > 1.0e-6] / (2 * epsilon * omdx)).sum() + N * diagonals
 
-    dim = 2 * np.log(ds1 / ds2) / np.log(opdx / omdx)
+    dim = 2 * torch.log(ds1 / ds2) / torch.log(torch.tensor(opdx / omdx, device=d.device, dtype=torch.float64))
 
     ds = torch.exp(-dsum[dsum > 0] / (2 * epsilon)).sum() + N * diagonals
-    ddim = 2 * np.log(ds1 * ds2 / (ds * ds)) / (dx * dx) + dim
+    ddim = 2 * torch.log(ds1 * ds2 / (ds * ds)) / (dx * dx) + dim
 
     return dim, ddim
 # end def estimate_dimension
