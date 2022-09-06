@@ -47,8 +47,8 @@ def del0(x, n, epsilon=None):
 
     # l, u = eig_wrap(dmat, dsum, n)
     ln, un = eigh(
-        dmat.numpy(),
-        dsum.numpy(),
+        dmat.cpu().numpy(),
+        dsum.cpu().numpy(),
         eigvals_only=False,
         subset_by_index=[dmat.shape[0] - n, dmat.shape[0] - 1],
     )
@@ -56,5 +56,7 @@ def del0(x, n, epsilon=None):
         un[:, ::-1].copy()
     )  # eigh returns ascending order
     llog = -torch.log(l) / eps2
-    return u, llog, dsum
+    return u.to(x.dtype).to(x.device), \
+           llog.to(x.dtype).to(x.device), \
+           dsum.to(x.dtype).to(x.device)
 # end def del0

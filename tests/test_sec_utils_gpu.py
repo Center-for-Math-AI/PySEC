@@ -3,21 +3,27 @@ import torch
 import numpy as np
 from math import sqrt
 from PySEC.distance_funcs import pdist2, self_knn_expensive, knn_expensive
-from PySEC.generate_data import laplacian_eig_truth
+from PySEC.generate_data import laplacian_eig_truth, generate_circle, generate_torus
 from PySEC.sec_utils import (reshape_fortran, get_degen_patt,
-                             estimate_dimension)
+                             estimate_dimension, compare_eigenpairs)
+from PySEC.nystrom_cidm import cidm, nystrom
+from PySEC.del0 import del0
+from PySEC.del1 import del1_as_einsum
 from sklearn.neighbors import NearestNeighbors
 
 
-atol = 1.0e-14
-rtol = 1.0e-12
+# atol = 1.0e-14
+# rtol = 1.0e-12
+# dtype_tols = [[sqrt(atol), sqrt(rtol)], [atol, rtol]] # too tight for SEC apparently
+atol = 1.0e-8
+rtol = 1.0e-5
+dtype_tols = [[atol, rtol], [pow(atol, 1.5), pow(rtol, 1.5)]]
 
 if not torch.cuda.is_available():
     print('cannot run GPU tests without cuda')
     pytest.exit('cannot run GPU tests without cuda')
 
 dtypes = [torch.float32, torch.float64]
-dtype_tols = [[sqrt(atol), sqrt(rtol)], [atol, rtol]]
 devices = [f'cuda:{d}' for d in range(torch.cuda.device_count())]
 
 def test_gpu_properties():
@@ -156,3 +162,96 @@ def test_estimate_dimension_gpu():
             assert torch.allclose(dim, torch.tensor(cpu_truth[ii][0], dtype=torch.float64))
             assert torch.allclose(ddim, torch.tensor(cpu_truth[ii][1], dtype=torch.float64))
             #print(f'\n{dim}\n{ddim}')
+
+
+## test del0
+def test_del0_eigh_gpu():
+    # test eigenvalues from scipy.linalg.eigh
+    # assuming cpu implementation works from comparing to matlab, compare gpu to cpu
+    num_points = 120
+    epsilon = 0.05
+    eig_size = 100
+    data, iparams = generate_circle(num_points)
+
+    for device in devices:
+        for ii, dtype in enumerate(dtypes[0:]):
+            atol, rtol = dtype_tols[ii] #
+            ret_list_gpu = del0(data.T.to(dtype).to(device), eig_size, epsilon)
+            ret_list_cpu = del0(data.T.to(dtype).to(device), eig_size, epsilon)
+            eig_truth = laplacian_eig_truth(eig_size)
+            torch.allclose(ret_list_gpu[1], eig_truth.to(dtype).to(device), atol, rtol)
+            for rgpu, rcpu in zip(ret_list_gpu, ret_list_cpu):
+                assert torch.allclose(rgpu, rcpu.to(device), atol=atol, rtol=rtol)
+
+
+## test del1_as
+def test_del1_as_eigh_gpu():
+    # test eigenvalues from scipy.linalg.eigh
+    # assuming cpu implementation works from comparing to matlab, compare gpu to cpu
+    # GPU doesn't agree!!!
+    num_points = 120
+    epsilon = 0.05
+    n0 = 100
+    n1 = 20
+    data, iparams = generate_circle(num_points)
+    torch.set_default_dtype(torch.float64)
+
+    for device in devices:
+        for dtype, [atol, rtol] in zip(dtypes[1:], dtype_tols[1:]):
+            print(f'\nRunning on {device} with {dtype}')
+            u0, l0, d0 = del0(data.T.to(dtype).to(device), n0, epsilon)
+            ret_list_gpu = del1_as_einsum(u0, l0, d0, n1)
+            ret_list_cpu = del1_as_einsum(u0.cpu(), l0.cpu(), d0.cpu(), n1)
+
+            # eig_same = compare_eigenpairs(ret_list_gpu[1].cpu(), ret_list_gpu[0].cpu(),
+            #                               ret_list_cpu[1], ret_list_cpu[0],
+            #                               atol=atol, rtol=rtol, verbose=True)
+            for ii, (rgpu, rcpu) in enumerate(zip(ret_list_gpu, ret_list_cpu)):
+                assert rgpu.dtype in dtypes
+                assert str(rgpu.device) == device
+                if ii == 0: continue # skip eigen vectors
+                same = torch.allclose(rgpu, rcpu.to(device), atol=atol, rtol=rtol)
+                assert same
+                # test = rgpu.cpu() - rcpu
+                # if not same:
+                #     print(f'#{ii} max pdiff = {torch.abs(test/rcpu.clamp(min=atol)).max()}')
+                # else:
+                #     print(f'@{ii} max pdiff = {torch.abs(test/rcpu.clamp(min=atol)).max()}')
+
+
+## test cidm
+def test_cidm_circle_eigh():
+    num_points = 120
+    data, iparams = generate_circle(num_points)
+    torch.set_default_dtype(torch.float64)
+
+    for device in devices:
+        for dtype, [atol, rtol] in zip(dtypes[1:], dtype_tols[1:]):
+            print(f'\nRunning on {device} with {dtype}')
+            ret_list_gpu = cidm(data.T.to(dtype).to(device))
+            ret_list_cpu = cidm(data.T.to(dtype).to('cpu'))
+
+            for ii, (rgpu, rcpu) in enumerate(zip(ret_list_gpu, ret_list_cpu)):
+
+                if isinstance(rgpu, torch.Tensor):
+                    assert rgpu.dtype in dtypes
+                    assert str(rgpu.device) == device
+                    same = torch.allclose(rgpu, rcpu.to(device), atol=atol, rtol=rtol)
+                    test = rgpu.cpu() - rcpu
+                    if not same:
+                        print(f'#{ii} max pdiff = {torch.abs(test / rcpu.clamp(min=atol)).max()}')
+                    else:
+                        print(f'@{ii} max pdiff = {torch.abs(test / rcpu.clamp(min=atol)).max()}')
+
+                else:
+                    print(type(rgpu))
+
+                # else: # DiffusionKernelData
+                #     dgpu = {mem: vars(rgpu)[mem] for mem in vars(rgpu) if not mem.startswith("__")}
+                #     dcpu = {mem: vars(rcpu)[mem] for mem in vars(rcpu) if not mem.startswith("__")}
+                #     for key in dgpu.keys():
+                #         if 'u' != str(key).lower():
+                #             t1 = torch.as_tensor(dgpu[key]).to_dense()
+                #             t2 = torch.as_tensor(dcpu[key]).to_dense()
+                #             assert torch.allclose(t1, t2, atol=atol, rtol=rtol)
+

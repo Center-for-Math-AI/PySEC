@@ -60,7 +60,7 @@ def cidm(x, nvars=None, k=None, k2=None, tuning_method=None):
 
     dx = torch.exp(-dx / (2 * epsilon))
 
-    coo = torch.stack((repmat(torch.arange(N), [k]).reshape(-1), dxi.reshape(-1)))
+    coo = torch.stack((repmat(torch.arange(N, device=x.device), [k]).reshape(-1), dxi.reshape(-1)))
     d_sparse = torch.sparse_coo_tensor(coo, dx.reshape(-1), [N, N])
     KP.d = d_sparse.clone()
     d_sparse = 0.5 * (d_sparse + d_sparse.t())
@@ -83,7 +83,7 @@ def cidm(x, nvars=None, k=None, k2=None, tuning_method=None):
         # if True:
         sigma = 1.01
         l, u = torch.linalg.eigh(
-            d_sparse.to_dense() - sigma * torch.eye(d_sparse.shape[0])
+            d_sparse.to_dense() - sigma * torch.eye(d_sparse.shape[0], device=d_sparse.device)
         )
         l, sidx = torch.topk(l + sigma, nvars, largest=True)  # mimic matlab eigs()
         u = u[:, sidx]  # sort and subset eigenvecs

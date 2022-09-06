@@ -23,7 +23,7 @@ def sparse_diag(vec, mat_shape=None, diag=0):
     if mat_shape is None:
         mat_shape = [vec.shape[0], vec.shape[0]]
     min_shape = min(mat_shape)  # handles rectangular
-    diag_ids = torch.arange(min_shape, dtype=int)
+    diag_ids = torch.arange(min_shape, device=vec.device)
 
     if diag == 0:
         coo = torch.stack((diag_ids, diag_ids))
@@ -49,7 +49,7 @@ def eig_wrap(a, b, n=None, sort_type="largest mag"):
     k = a.shape[0] if n is None else n
     descending = True if sort_type.lower().startswith("l") else False
 
-    w, vr = eig(a.numpy(), b=b.numpy(), left=False, right=True)
+    w, vr = eig(a.cpu().numpy(), b=b.cpu().numpy(), left=False, right=True)
     wt = torch.as_tensor(w.real, dtype=a.dtype)
     if "mag" in sort_type.lower() or "abs" in sort_type.lower():
         wt = torch.abs(wt)
@@ -57,7 +57,7 @@ def eig_wrap(a, b, n=None, sort_type="largest mag"):
     L = L[:k]
     U = torch.as_tensor(vr.real, dtype=a.dtype)[:, isort[:k]]
 
-    return L, U
+    return L.to(a.device), U.to(a.device)
 # end def eig_wrap
 
 
