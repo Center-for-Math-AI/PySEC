@@ -12,18 +12,30 @@ from dataclasses import dataclass
 
 
 @dataclass
-class DiffusionKernelData(object):
-    rho: float = 0
+class DiffusionKernelData:
     epsilon: float = 0
     dim: int = 0
     k: int = 0
     k2: int = 0
+    rho: torch.Tensor = None
     d: torch.Tensor = None
     X: torch.Tensor = None
     peq: torch.Tensor = None
     u: torch.Tensor = None
     l: torch.Tensor = None
     lheat: torch.Tensor = None
+
+    def to(self, dest):
+        """ send tensors to type or device """
+        self.rho = self.rho.to(dest)
+        self.d = self.d.to(dest)
+        self.X = self.X.to(dest)
+        self.peq = self.peq.to(dest)
+        self.u = self.u.to(dest)
+        self.l = self.l.to(dest)
+        self.lheat = self.lheat.to(dest)
+        return self
+
 # end class DiffusionKernelData:
 
 
@@ -37,7 +49,7 @@ def cidm(x, nvars=None, k=None, k2=None, tuning_method=None):
     if nvars is None:
         nvars = 2 * k
 
-    KP = DiffusionKernelData
+    KP = DiffusionKernelData()
     KP.X = x
     KP.k = k
     KP.k2 = k2
@@ -128,7 +140,8 @@ def nystrom(x, KP):
 
     # RBF kernel
     dx = torch.exp(-dx / (2 * KP.epsilon))
-    coo = torch.stack((repmat(torch.arange(N), [k]).reshape(-1), dxi.reshape(-1)))
+    coo = torch.stack((repmat(torch.arange(N, device=x.device), [k]).reshape(-1),
+                       dxi.reshape(-1)))
     d_sparse = torch.sparse_coo_tensor(coo, dx.reshape(-1), [N, KP.X.shape[0]])
     d_sparse = d_sparse.coalesce()
 
@@ -144,7 +157,11 @@ def nystrom(x, KP):
     d_sparse = d_sparse.coalesce()
 
     Linv = sparse_diag(1 / KP.lheat)
-    u = smsm(torch.smm(d_sparse, KP.u), Linv).to_dense()
+    u = smsm(Linv.t(), smsm(d_sparse, KP.u).t()).t()
+    # smsm wants the sparse matrix first,
+    # had to do this to stay on GPU until I find a better way
+    # old = smsm(torch.smm(d_sparse, KP.u), Linv).to_dense()
+    # torch.allclose(u, old, atol=1.e-14, rtol=1.e-12)
 
     return u, peq, qest
 # end def nystrom

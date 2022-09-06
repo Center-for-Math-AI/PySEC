@@ -172,7 +172,7 @@ def test_nystrom_circle():
 
     for rp, rm in zip(retp, retm):
         assert torch.allclose(
-            rp.view(-1), torch.as_tensor(rm).view(-1), atol=atol, rtol=rtol
+            rp.reshape(-1), torch.as_tensor(rm).reshape(-1), atol=atol, rtol=rtol
         )
 
 
@@ -193,7 +193,7 @@ def test_nystrom_torus():
 
     for rp, rm in zip(retp, retm):
         assert torch.allclose(
-            rp.view(-1), torch.as_tensor(rm).view(-1), atol=atol, rtol=rtol
+            rp.reshape(-1), torch.as_tensor(rm).reshape(-1), atol = atol, rtol = rtol
         )
 
 

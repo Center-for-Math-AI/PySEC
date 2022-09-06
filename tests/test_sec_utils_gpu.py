@@ -1,6 +1,7 @@
 import pytest
 import torch
 import numpy as np
+from copy import deepcopy
 from math import sqrt
 from PySEC.distance_funcs import pdist2, self_knn_expensive, knn_expensive
 from PySEC.generate_data import laplacian_eig_truth, generate_circle, generate_torus
@@ -232,26 +233,32 @@ def test_cidm_circle_eigh():
             ret_list_cpu = cidm(data.T.to(dtype).to('cpu'))
 
             for ii, (rgpu, rcpu) in enumerate(zip(ret_list_gpu, ret_list_cpu)):
+                if isinstance(rgpu, torch.Tensor):
+                    assert rgpu.dtype in dtypes
+                    assert str(rgpu.device) == device
+                    if ii == 0: continue  # skip eigen vectors
+                    assert torch.allclose(rgpu, rcpu.to(device), atol=atol, rtol=rtol)
 
+
+def test_nystrom_torus_gpu():
+    torch.set_default_dtype(torch.float64)
+    num_points = 1 * 10 ** 3
+    data, iparams = generate_torus(
+        num_points, noise=1.0e-4
+    )  # noise the lattice to break degeneracies
+
+    for device in devices:
+        for dtype, [atol, rtol] in zip(dtypes[1:], dtype_tols[1:]):
+            print(f'\nRunning on {device} with {dtype}')
+            u, l, peq, qest, eps, dim, KP = cidm(data.T.to('cpu'))
+            x2 = data[:, :: num_points // 4].T
+            ret_list_cpu = nystrom(x2.to('cpu'), KP)
+            KP = KP.to(device)  # no copy implemented yet
+            ret_list_gpu = nystrom(x2.to(device), KP)
+
+            for ii, (rgpu, rcpu) in enumerate(zip(ret_list_gpu, ret_list_cpu)):
                 if isinstance(rgpu, torch.Tensor):
                     assert rgpu.dtype in dtypes
                     assert str(rgpu.device) == device
                     same = torch.allclose(rgpu, rcpu.to(device), atol=atol, rtol=rtol)
-                    test = rgpu.cpu() - rcpu
-                    if not same:
-                        print(f'#{ii} max pdiff = {torch.abs(test / rcpu.clamp(min=atol)).max()}')
-                    else:
-                        print(f'@{ii} max pdiff = {torch.abs(test / rcpu.clamp(min=atol)).max()}')
-
-                else:
-                    print(type(rgpu))
-
-                # else: # DiffusionKernelData
-                #     dgpu = {mem: vars(rgpu)[mem] for mem in vars(rgpu) if not mem.startswith("__")}
-                #     dcpu = {mem: vars(rcpu)[mem] for mem in vars(rcpu) if not mem.startswith("__")}
-                #     for key in dgpu.keys():
-                #         if 'u' != str(key).lower():
-                #             t1 = torch.as_tensor(dgpu[key]).to_dense()
-                #             t2 = torch.as_tensor(dcpu[key]).to_dense()
-                #             assert torch.allclose(t1, t2, atol=atol, rtol=rtol)
-
+                    assert same
