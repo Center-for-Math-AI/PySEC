@@ -61,14 +61,14 @@ def cidm(x, nvars=None, k=None, k2=None, tuning_method=None):
     dx = dx * dx / (repmat(rho, [k]) * rho[dxi])
 
     if tuning_method is None:
-        epsilon = torch.mean(dx[:, 1:k2])
+        epsilon = torch.mean(dx[:, 1:k2]).item()
     else:
         raise NotImplementedError()
     KP.epsilon = epsilon
 
     # dim, ddim = estimate_dimension(dx, epsilon)
     dim, ddim = estimate_dimension(dx, epsilon)
-    KP.dim = dim
+    KP.dim = dim.item()
 
     dx = torch.exp(-dx / (2 * epsilon))
 
@@ -110,7 +110,9 @@ def cidm(x, nvars=None, k=None, k2=None, tuning_method=None):
         # if the eigs are ordered as 1 = λ0 > |λ1| >= |λ2| >= ..., then only returning
         # the largest can be incorrect
         sigma = 1.01
-        d_eig = d_sparse - sparse_diag(torch.full([N], sigma, dtype=d_sparse.dtype))
+        d_eig = d_sparse - sparse_diag(torch.full([N], sigma,
+                                                  dtype=d_sparse.dtype,
+                                                  device=d_sparse.device))
         l, u = torch.lobpcg(d_eig, k=nvars, largest=True)
         l += sigma
         KP.lheat = l
@@ -156,12 +158,9 @@ def nystrom(x, KP):
     d_sparse = tmp
     d_sparse = d_sparse.coalesce()
 
-    Linv = sparse_diag(1 / KP.lheat)
-    u = smsm(Linv.t(), smsm(d_sparse, KP.u).t()).t()
-    # smsm wants the sparse matrix first,
-    # had to do this to stay on GPU until I find a better way
-    # old = smsm(torch.smm(d_sparse, KP.u), Linv).to_dense()
-    # torch.allclose(u, old, atol=1.e-14, rtol=1.e-12)
+    # Linv = sparse_diag(1 / KP.lheat)
+    #u = smsm(Linv.t(), smsm(d_sparse, KP.u).t()).t()
+    u = torch.einsum('ij,j->ij', d_sparse @ KP.u, 1./KP.lheat)
 
     return u, peq, qest
 # end def nystrom

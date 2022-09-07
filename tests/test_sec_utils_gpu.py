@@ -221,7 +221,7 @@ def test_del1_as_eigh_gpu():
 
 
 ## test cidm
-def test_cidm_circle_eigh():
+def test_cidm_circle_gpu():
     num_points = 120
     data, iparams = generate_circle(num_points)
     torch.set_default_dtype(torch.float64)
@@ -250,11 +250,11 @@ def test_nystrom_torus_gpu():
     for device in devices:
         for dtype, [atol, rtol] in zip(dtypes[1:], dtype_tols[1:]):
             print(f'\nRunning on {device} with {dtype}')
-            u, l, peq, qest, eps, dim, KP = cidm(data.T.to('cpu'))
+            u, l, peq, qest, eps, dim, KP = cidm(data.T.to(device))
             x2 = data[:, :: num_points // 4].T
-            ret_list_cpu = nystrom(x2.to('cpu'), KP)
-            KP = KP.to(device)  # no copy implemented yet
             ret_list_gpu = nystrom(x2.to(device), KP)
+            KP = KP.to('cpu')  # no copy implemented yet
+            ret_list_cpu = nystrom(x2.to('cpu'), KP)
 
             for ii, (rgpu, rcpu) in enumerate(zip(ret_list_gpu, ret_list_cpu)):
                 if isinstance(rgpu, torch.Tensor):
