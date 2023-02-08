@@ -82,6 +82,8 @@ def del1_as(u, l, D, n=None):
 
 
 def del1_as_einsum(u, l, D, n=None):
+    # @TODO: D from del0 and cidm are diag matrices, can swith logic output of del0 to
+    # put out a diag matrix and switch del1 logic to have a vector D input
 
     n0 = u.shape[1]
     if n is None:

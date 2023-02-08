@@ -51,6 +51,26 @@ def test_pdist2_xy():
     #                       torch.abs(torch.tensor(dxys)) )
     assert torch.allclose(dxy.to(float), torch.tensor(dxys), atol=atol, rtol=rtol)
 
+def test_pdist2_ssim():
+
+    x = torch.arange(0, 10, 2).reshape(-1, 1) * 1.0
+    x = x.to(float)
+    try:
+        ret = pdist2(x, x, distance='ssim')
+    except ValueError as err:
+        assert(True)
+    finally:
+        assert(False, "Cannot use scalars with SSIM")
+
+    x = torch.rand((4, 1, 20, 20))
+    ret = pdist2(x, x, distance='ssim')
+
+    # all diags are zero
+    assert(torch.allclose(torch.diag(ret), torch.zeros(x.shape[0])))
+
+    # all off-diags are non-zero (should be true if all x[:] are different)
+    assert((ret.flatten()[1:].view(x.shape[0] - 1, x.shape[0] + 1)[:, :-1].reshape(-1) > 1.e-8).all())
+
 
 def test_self_knn_expensive():
 
