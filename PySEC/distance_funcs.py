@@ -1,4 +1,5 @@
 import torch
+from tqdm import tqdm, trange
 
 
 """
@@ -32,7 +33,7 @@ def self_pair_dist_p2(x):
     return torch.sqrt((dmat_full * dmat_full).sum(dim=-1))
 
 
-def pdist2(x, y=None, distance='euclidean'):
+def pdist2(x, y=None, distance='ssim', batch_size=128):
     """
     same as above, but for transpose x and handles two args so no just self,
     also is done without creating a 3d object:
@@ -62,17 +63,43 @@ def pdist2(x, y=None, distance='euclidean'):
         # ssim = StructuralSimilarityIndexMeasure(data_range=1., reduction='none').to(x.device)
         from torchmetrics.functional import structural_similarity_index_measure
         #NB: SSIM can be negative! use the 1 - SSIM for distance
+        # Laplacian pyramids are fast to compute, maybe the euclidean distance of those is better
 
         if y is None:
             y = x
 
+        #    # ret = torch.empty((x.shape[0], x.shape[0]), dtype=x.dtype, device=x.device)
+        # else:
+
+        yds = torch.utils.data.TensorDataset(y)
+        ydl = torch.utils.data.DataLoader(yds, batch_size=batch_size, shuffle=False)
         ret = torch.empty((x.shape[0], y.shape[0]), dtype=x.dtype, device=x.device)
+        tmp = torch.empty((y.shape[0]), dtype=x.dtype, device=y.device)
         # This is slow, computes both ij and ji elements instead of using symmetry if y is None
+        pbar = trange(len(x), unit="Row", ncols=120, position=0, leave=True)
+        pbar.set_description(f"pdist2:")
+
         for ix, xrow in enumerate(x):
-            ret[ix, :] = 1.0 - structural_similarity_index_measure(
-                xrow.unsqueeze(0).expand(y.shape[0], *xrow.shape),
-                y, reduction='none'
-            )
+
+            ioff = 0
+            for batch in ydl:
+                yj = batch[0]
+                tmp[ioff:ioff+len(yj)] = 1.0 - structural_similarity_index_measure(
+                    xrow.unsqueeze(0).expand(yj.shape[0], *xrow.shape),
+                    yj, reduction='none')
+
+                ioff += len(yj)
+
+            # ret[ix, :] = 1.0 - structural_similarity_index_measure(
+            #     xrow.unsqueeze(0).expand(y.shape[0], *xrow.shape),
+            #     y, reduction='none'
+            # )
+
+            # pbar.set_postfix_str(f"row: {ix}")
+            pbar.update()
+        pbar.close()
+
+        del tmp
         return ret
 
     else:

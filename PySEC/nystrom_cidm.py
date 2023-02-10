@@ -39,7 +39,7 @@ class DiffusionKernelData:
 # end class DiffusionKernelData:
 
 
-def cidm(x, nvars=None, k=None, k2=None, tuning_method=None):
+def cidm(x, nvars=None, k=None, k2=None, tuning_method=None, **knn_args):
 
     N, n = x.shape[0], x.shape[1]
     if k2 is None:
@@ -54,7 +54,7 @@ def cidm(x, nvars=None, k=None, k2=None, tuning_method=None):
     KP.k = k
     KP.k2 = k2
 
-    dx, dxi = self_knn_expensive(x, k)
+    dx, dxi = self_knn_expensive(x, k, **knn_args)
 
     rho = torch.mean(dx[:, 1:k2], dim=1)  #
     KP.rho = rho
