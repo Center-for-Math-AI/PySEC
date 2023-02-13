@@ -31,8 +31,11 @@ def test_pdist2_self():
     assert torch.allclose(x[:, 0], dx[0], atol=atol, rtol=rtol)
 
     dxs = sdist.cdist(x, x)
-    assert torch.allclose(dx.to(float), torch.tensor(dxs), atol=atol, rtol=rtol)
+    assert torch.allclose(dx.to(float), torch.tensor(dxs, dtype=float), atol=atol, rtol=rtol)
 
+    # test self distance optional arg is consistent with two args
+    dxx = pdist2(x, x)
+    assert torch.allclose(dxx.to(float), dx.to(float), atol=atol, rtol=rtol)
 
 def test_pdist2_xy():
     x = torch.arange(0, 10, 2).reshape(-1, 1) * 1.0
@@ -51,6 +54,12 @@ def test_pdist2_xy():
     #                       torch.abs(torch.tensor(dxys)) )
     assert torch.allclose(dxy.to(float), torch.tensor(dxys), atol=atol, rtol=rtol)
 
+    # test self distance optional arg is consistent with two args
+    dx0 = pdist2(x)
+    dxx = pdist2(x, x)
+    assert torch.allclose(dx0.to(float), torch.tensor(dxx), atol=atol, rtol=rtol)
+
+
 def test_pdist2_ssim():
 
     x = torch.arange(0, 10, 2).reshape(-1, 1) * 1.0
@@ -65,12 +74,17 @@ def test_pdist2_ssim():
     x = torch.rand((4, 1, 20, 20))
     y = torch.rand((3, 1, 20, 20))
     ret = pdist2(x, y, distance='ssim')
+    assert(ret.shape[0] == x.shape[0] and ret.shape[1] == y.shape[0])
+
+    retx0 = pdist2(x, distance='ssim')
+    retxx = pdist2(x, x, distance='ssim')
+    assert(torch.allclose(retx0, retxx, atol=atol, rtol=rtol))
 
     # all diags are zero
-    assert(torch.allclose(torch.diag(ret), torch.zeros(x.shape[0])))
+    assert(torch.allclose(torch.diag(retxx), torch.zeros(x.shape[0])))
 
     # all off-diags are non-zero (should be true if all x[:] are different)
-    assert((ret.flatten()[1:].view(x.shape[0] - 1, x.shape[0] + 1)[:, :-1].reshape(-1) > 1.e-8).all())
+    assert((retxx.flatten()[1:].view(x.shape[0] - 1, x.shape[0] + 1)[:, :-1].reshape(-1) > 1.e-8).all())
 
 
 def test_self_knn_expensive():
