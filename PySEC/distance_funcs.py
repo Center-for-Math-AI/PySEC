@@ -33,13 +33,21 @@ def self_pair_dist_p2(x):
     return torch.sqrt((dmat_full * dmat_full).sum(dim=-1))
 
 
-def pdist2(x, y=None, distance='ssim', batch_size=128):
+def pdist2(x, y=None, distance='ssim', batch_size=512, compute_device=None, progress=True):
     """
     same as above, but for transpose x and handles two args so no just self,
     also is done without creating a 3d object:
     d_xy = sum_s (x_s - y_s)^2 = sum_s ( x_s^2 + y_s^2 - 2*x_s*y_s )
     where the last term can be computed with einsum
+    #NB: SSIM specific args
+    :param batch_size: batch size for data loading to compute_device
+    :param compute_device: torch device for computing, can be different than input tensor device
+    :param progress: whether to print a tqdm progress bar to stderr
+    :returns: x.shape[0] by y.shape[0] matrix with x's dtype and device
     """
+
+    if compute_device is None:
+        compute_device = x.device
 
     if 'euclid' in distance.lower():
 
@@ -66,44 +74,68 @@ def pdist2(x, y=None, distance='ssim', batch_size=128):
         # Laplacian pyramids are fast to compute, maybe the euclidean distance of those is better
 
         if y is None:
-            y = x
 
-        #    # ret = torch.empty((x.shape[0], x.shape[0]), dtype=x.dtype, device=x.device)
-        # else:
+            # This would be better if ix1 and ix2 were computed on the fly
+            ix1, ix2 = torch.triu_indices(x.shape[0], x.shape[0], 1) # upper triangular, skip diag
+            idx_ds = torch.utils.data.TensorDataset(ix1, ix2)
+            idx_dl = torch.utils.data.DataLoader(idx_ds, batch_size=batch_size, shuffle=False)
 
-        yds = torch.utils.data.TensorDataset(y)
-        ydl = torch.utils.data.DataLoader(yds, batch_size=batch_size, shuffle=False)
-        ret = torch.empty((x.shape[0], y.shape[0]), dtype=x.dtype, device=x.device)
-        tmp = torch.empty((y.shape[0]), dtype=x.dtype, device=y.device)
-        # This is slow, computes both ij and ji elements instead of using symmetry if y is None
-        pbar = trange(len(x), unit="Row", ncols=120, position=0, leave=True)
-        pbar.set_description(f"pdist2:")
+            tmp = torch.empty((len(ix1),), dtype=x.dtype, device=compute_device)
 
-        for ix, xrow in enumerate(x):
+            if progress:
+                pbar = trange(len(ix1), unit="Element", ncols=120, position=0, leave=True)
+                pbar.set_description(f"pdist2:")
 
             ioff = 0
-            for batch in ydl:
-                yj = batch[0]
-                tmp[ioff:ioff+len(yj)] = 1.0 - structural_similarity_index_measure(
-                    xrow.unsqueeze(0).expand(yj.shape[0], *xrow.shape),
-                    yj, reduction='none')
+            for batch in idx_dl:
+                i1, i2 = batch[0], batch[1]
+                tmp[ioff:ioff + len(i1)] = 1.0 - structural_similarity_index_measure(
+                    x[i1].to(compute_device),
+                    x[i2].to(compute_device),
+                    reduction='none')
+                ioff += len(i1)
+                if progress: pbar.update(len(i1))
 
-                ioff += len(yj)
+            # zeros for diag, lets accumulate one triangular into the other
+            ret = torch.zeros((x.shape[0], x.shape[0]), dtype=x.dtype, device=x.device)
+            ret[ix1, ix2] = tmp.to(ret.device)
+            ret = ret + ret.t() # copy upper tri to lower tri
+            del ix1, ix2, tmp
+            if progress: pbar.close()
 
-            # ret[ix, :] = 1.0 - structural_similarity_index_measure(
-            #     xrow.unsqueeze(0).expand(y.shape[0], *xrow.shape),
-            #     y, reduction='none'
-            # )
+        else:
 
-            # pbar.set_postfix_str(f"row: {ix}")
-            pbar.update()
-        pbar.close()
+            yds = torch.utils.data.TensorDataset(y)
+            ydl = torch.utils.data.DataLoader(yds, batch_size=batch_size, shuffle=False)
+            ret = torch.empty((x.shape[0], y.shape[0]), dtype=x.dtype, device=x.device)
+            tmp = torch.empty((y.shape[0]), dtype=x.dtype, device=compute_device)
+            if progress:
+                pbar = trange(len(x)*len(y), unit="Element", ncols=120, position=0, leave=True)
+                pbar.set_description(f"pdist2:")
 
-        del tmp
-        return ret
+            for ix, xrow in enumerate(x):
+
+                xrow = xrow.to(compute_device)
+
+                ioff = 0
+                for batch in ydl:
+                    yj = batch[0].to(compute_device)
+                    tmp[ioff:ioff+len(yj)] = 1.0 - structural_similarity_index_measure(
+                        xrow.unsqueeze(0).expand(yj.shape[0], *xrow.shape),
+                        yj, reduction='none')
+
+                    ioff += len(yj)
+                    if progress: pbar.update(len(yj))
+
+                ret[ix] = tmp.to(ret.device)
+
+            del tmp
+            if progress: pbar.close()
 
     else:
-        raise ValueError('Unknown distance type')
+        raise ValueError('Unknown distance metric')
+
+    return ret
 
 
 def self_knn_expensive(x, k, **dist_args):

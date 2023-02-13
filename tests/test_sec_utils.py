@@ -63,7 +63,8 @@ def test_pdist2_ssim():
         assert(False, "Cannot use scalars with SSIM")
 
     x = torch.rand((4, 1, 20, 20))
-    ret = pdist2(x, x, distance='ssim')
+    y = torch.rand((3, 1, 20, 20))
+    ret = pdist2(x, y, distance='ssim')
 
     # all diags are zero
     assert(torch.allclose(torch.diag(ret), torch.zeros(x.shape[0])))
