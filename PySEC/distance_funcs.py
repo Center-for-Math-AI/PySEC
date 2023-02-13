@@ -33,7 +33,7 @@ def self_pair_dist_p2(x):
     return torch.sqrt((dmat_full * dmat_full).sum(dim=-1))
 
 
-def pdist2(x, y=None, distance='ssim', batch_size=512, compute_device=None, progress=True):
+def pdist2(x, y=None, distance='euclidean', batch_size=128, compute_device=None, progress=False):
     """
     same as above, but for transpose x and handles two args so no just self,
     also is done without creating a 3d object:
