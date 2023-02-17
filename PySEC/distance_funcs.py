@@ -1,5 +1,7 @@
 import torch
 from tqdm import tqdm, trange
+from torchmetrics.functional import structural_similarity_index_measure
+from kornia.geometry.transform import build_laplacian_pyramid as blp
 
 
 """
@@ -31,6 +33,28 @@ def self_pair_dist_p2(x):
     x_rep = x.unsqueeze(dim=-1).expand(x.shape[0], x.shape[1], nex).moveaxis(0, -1)
     dmat_full = x_rep - torch.moveaxis(x_rep, 1, 0)
     return torch.sqrt((dmat_full * dmat_full).sum(dim=-1))
+
+
+def dist(x, y, distance='euclidean'):
+    if 'euclid' in distance.lower():
+        return torch.linalg.norm((x-y).view(x.shape[0], -1), ord=2, dim=1)
+    elif 'ssim' in distance.lower():
+        return 1. - structural_similarity_index_measure(x, y, reduction='none')
+    elif 'lap' in distance.lower():
+        max_level = int(torch.ceil(torch.log2(torch.as_tensor(min(x.shape[-1], x.shape[-2])) / 8)))
+        xlp = blp(x, max_level=max_level, border_type='reflect', align_corners=False)
+        ylp = blp(y, max_level=max_level, border_type='reflect', align_corners=False)
+
+        xlp2 = [xp[:, :, :x.shape[-2] // 2 ** ii, :x.shape[-1] // 2 ** ii] for ii, xp in enumerate(xlp)]
+        ylp2 = [yp[:, :, :x.shape[-2] // 2 ** ii, :x.shape[-1] // 2 ** ii] for ii, yp in enumerate(ylp)]
+
+        l1_diffs = torch.cat(
+            [torch.linalg.norm((xp - yp).reshape(xp.shape[0], -1), ord=1, dim=1, keepdim=True)
+             for ii, (xp, yp) in enumerate(zip(xlp2, ylp2))],
+            dim=1)
+
+        lp_weights = 2. ** (2 * torch.arange(max_level))
+        return torch.sum(l1_diffs * lp_weights[None, :], dim=1)
 
 
 def pdist2(x, y=None, distance='euclidean', batch_size=128, compute_device=None, progress=False):

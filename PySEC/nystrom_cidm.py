@@ -125,16 +125,25 @@ def cidm(x, nvars=None, k=None, k2=None, tuning_method=None, **knn_args):
 # end def cidm
 
 
-def nystrom(x, KP):
-    N, n = x.shape[0], x.shape[1]
-    k = KP.k
-    k2 = KP.k2
+def nystrom(x, KP, **knn_args):
+    # NB: we assume x must be batched!
 
     #@TODO: this will be a bottleneck eventually and could be much cheaper
     # if you saved the ball tree from knn, in which case you just follow
     # the path to the nearest neighbor by sampling your distance to a
     # random point in the tree, should be logN instead of N
-    dx, dxi = knn_expensive(x, KP.X, k)  # dx.shape = [x.shape[0], k]
+
+    if len(x.shape) < len(KP.X.shape):
+        shape_diff = len(KP.X.shape) - len(x.shape)
+        xknn = x.view(*[1,]*shape_diff, *KP.X.shape[shape_diff:])
+    else:
+        xknn = x
+
+    N, n = xknn.shape[0], xknn[0].nelement()
+    k = KP.k
+    k2 = KP.k2
+
+    dx, dxi = knn_expensive(xknn, KP.X, k, **knn_args)
 
     # CkNN Normalization
     rho = torch.mean(dx[:, 1:k2], dim=1)
