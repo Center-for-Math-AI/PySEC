@@ -53,7 +53,7 @@ def dist(x, y, distance='euclidean'):
              for ii, (xp, yp) in enumerate(zip(xlp2, ylp2))],
             dim=1)
 
-        lp_weights = 2. ** (2 * torch.arange(max_level))
+        lp_weights = 2. ** (2 * torch.arange(max_level, dtype=x.dtype, device=x.device))
         return torch.sum(l1_diffs * lp_weights[None, :], dim=1)
 
 
@@ -155,6 +155,38 @@ def pdist2(x, y=None, distance='euclidean', batch_size=128, compute_device=None,
 
             del tmp
             if progress: pbar.close()
+
+
+
+    elif 'lap' in distance.lower():
+
+        yds = torch.utils.data.TensorDataset(y)
+        ydl = torch.utils.data.DataLoader(yds, batch_size=batch_size, shuffle=False)
+        ret = torch.empty((x.shape[0], y.shape[0]), dtype=x.dtype, device=x.device)
+        tmp = torch.empty((y.shape[0]), dtype=x.dtype, device=compute_device)
+        if progress:
+            pbar = trange(len(x) * len(y), unit="Element", ncols=120, position=0, leave=True)
+            pbar.set_description(f"pdist2:")
+
+        for ix, xrow in enumerate(x):
+
+            xrow = xrow.to(compute_device)
+
+            ioff = 0
+            for batch in ydl:
+                yj = batch[0].to(compute_device)
+                tmp[ioff:ioff + len(yj)] = dist(
+                    xrow.unsqueeze(0).expand(yj.shape[0], *xrow.shape),
+                    yj, distance=distance)
+
+                ioff += len(yj)
+                if progress: pbar.update(len(yj))
+
+            ret[ix] = tmp.to(ret.device)
+
+        del tmp
+        if progress: pbar.close()
+
 
     else:
         raise ValueError('Unknown distance metric')
