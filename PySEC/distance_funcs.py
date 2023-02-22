@@ -36,10 +36,13 @@ def self_pair_dist_p2(x):
 
 
 def dist(x, y, distance='euclidean'):
+
     if 'euclid' in distance.lower():
         return torch.linalg.norm((x-y).view(x.shape[0], -1), ord=2, dim=1)
+
     elif 'ssim' in distance.lower():
         return 1. - structural_similarity_index_measure(x, y, reduction='none')
+
     elif 'lap' in distance.lower():
         max_level = int(torch.ceil(torch.log2(torch.as_tensor(min(x.shape[-1], x.shape[-2])) / 8)))
         xlp = blp(x, max_level=max_level, border_type='reflect', align_corners=False)
@@ -55,6 +58,9 @@ def dist(x, y, distance='euclidean'):
 
         lp_weights = 2. ** (2 * torch.arange(max_level, dtype=x.dtype, device=x.device))
         return torch.sum(l1_diffs * lp_weights[None, :], dim=1)
+
+    else:
+        return ValueError(f'Unknown distance metric: {distance}')
 
 
 def pdist2(x, y=None, distance='euclidean', batch_size=128, compute_device=None, progress=False):
@@ -207,3 +213,69 @@ def knn_expensive(x, y, k, **dist_args):
     dx = pdist2(x, y, **dist_args)
     kn = min(k, dx.shape[1])
     return torch.topk(dx, kn, largest=False)
+
+
+
+
+def pdist2_batch(x, y=None, distance='euclidean', batch_size=128, compute_device=None, progress=False):
+    """
+    same as above, but for transpose x and handles two args so no just self,
+    also is done without creating a 3d object:
+    d_xy = sum_s (x_s - y_s)^2 = sum_s ( x_s^2 + y_s^2 - 2*x_s*y_s )
+    where the last term can be computed with einsum
+    #NB: SSIM specific args
+    :param batch_size: batch size for data loading to compute_device
+    :param compute_device: torch device for computing, can be different than input tensor device
+    :param progress: whether to print a tqdm progress bar to stderr
+    :returns: x.shape[0] by y.shape[0] matrix with x's dtype and device
+    """
+
+    # @TODO: see if it's faster to generate indices on the fly, will be necessary for massive datasets
+    # reading tmp into ret will be more of pain...
+
+    if compute_device is None:
+        compute_device = x.device
+
+    if y is None:
+
+        symm_flag = True
+        y = x
+        iix, iiy = torch.triu_indices(x.shape[0], x.shape[0], 1) # upper triangular, skip diag
+        idx_ds = torch.utils.data.TensorDataset(iix, iiy)
+        idx_dl = torch.utils.data.DataLoader(idx_ds, batch_size=batch_size, shuffle=False)
+
+    else:
+
+        symm_flag = False
+        iix, iiy = torch.meshgrid(torch.arange(x.shape[0]), torch.arange(y.shape[0]), indexing='ij')  #
+        iix, iiy = iix.ravel(), iiy.ravel()
+        idx_ds = torch.utils.data.TensorDataset(iix, iiy)
+        idx_dl = torch.utils.data.DataLoader(idx_ds, batch_size=batch_size, shuffle=False)
+
+    tmp = torch.empty((len(iix),), dtype=x.dtype, device=compute_device)
+
+    if progress:
+        pbar = trange(len(iix), unit="Element", ncols=120, position=0, leave=True)
+        pbar.set_description(f"pdist2 ({distance[:6]}): ")
+
+    ioff = 0
+    for batch in idx_dl:
+        i1, i2 = batch[0], batch[1]
+        xb, yb = x[i1].to(compute_device), y[i2].to(compute_device)
+        tmp[ioff:ioff + len(i1)] = dist(xb, yb, distance=distance)
+        ioff += len(i1)
+        if progress: pbar.update(len(i1))
+
+    if symm_flag: # x == y
+        # zeros for diag, lets accumulate one triangular into the other
+        ret = torch.zeros((x.shape[0], x.shape[0]), dtype=x.dtype, device=x.device)
+        ret[iix, iiy] = tmp.to(ret.device)
+        ret = ret + ret.t() # copy upper tri to lower tri
+
+    else:
+        ret = torch.empty((x.shape[0], y.shape[0]), dtype=x.dtype, device=x.device)
+        ret[iix, iiy] = tmp.to(ret.device)
+
+    if progress: pbar.close()
+    return ret
+
