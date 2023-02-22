@@ -166,6 +166,9 @@ def pdist2(x, y=None, distance='euclidean', batch_size=128, compute_device=None,
 
     elif 'lap' in distance.lower():
 
+        if y is None:
+            y = x
+
         yds = torch.utils.data.TensorDataset(y)
         ydl = torch.utils.data.DataLoader(yds, batch_size=batch_size, shuffle=False)
         ret = torch.empty((x.shape[0], y.shape[0]), dtype=x.dtype, device=x.device)
