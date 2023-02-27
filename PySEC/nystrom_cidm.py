@@ -41,6 +41,8 @@ class DiffusionKernelData:
 
 def cidm(x, nvars=None, k=None, k2=None, tuning_method=None, **knn_args):
 
+    # @TODO: provide ability to pass in knn data, so a user can do arbitrary metrics (for intrinsic)
+
     N, n = x.shape[0], x.shape[1]
     if k2 is None:
         k2 = ceil(log(N))

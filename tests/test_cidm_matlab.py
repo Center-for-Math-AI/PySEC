@@ -50,7 +50,7 @@ def dataclass2matlab_dict(dclass):  # dclass = dataclass
             new_val = matlab.double(new_val.clone().numpy())
 
         elif isinstance(new_val, float):
-            new_val = matlab.doulbe(new_val)
+            new_val = matlab.double(new_val)
 
         ret[key] = new_val
 
