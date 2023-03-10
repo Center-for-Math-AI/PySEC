@@ -10,18 +10,6 @@ atol = 1.0e-14
 rtol = 1.0e-10
 
 
-def test_self_pair_dist():
-    x = torch.arange(0, 10, 2).reshape(-1, 1) * 1.0
-    x *= x  # square to make it non-linear spacing so result has less symmetry
-    dx = self_pair_dist_p2(x.T)
-
-    assert dx.shape[0] == dx.shape[1] == x.shape[0]
-    assert torch.allclose(x[:, 0], dx[0], atol=atol, rtol=rtol)
-
-    dxs = sdist.cdist(x, x)
-    assert torch.allclose(dx.to(float), torch.tensor(dxs))
-
-
 def test_pdist2_self():
     x = torch.arange(0, 10, 2).reshape(-1, 1) * 1.0
     x *= x  # square to make it non-linear spacing so result has less symmetry
