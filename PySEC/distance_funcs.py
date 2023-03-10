@@ -35,9 +35,56 @@ def self_pair_dist_p2(x):
     return torch.sqrt((dmat_full * dmat_full).sum(dim=-1))
 
 
+
+class DistanceMetric:
+    """ Wrapper class for distance metrics
+    """
+
+    def __init__(self, distance='euclidean'):
+        if callable(distance):
+            self.distance = distance
+        else:
+            try:
+                self.distance = getattr(self, distance.lower())
+            except AttributeError:
+                raise ValueError(f'Unknown distance function: {distance}')
+
+    def __call__(self, *args, **kwargs):
+        return self.distance(*args, **kwargs)
+
+    def euclidean(self, x, y):
+        return torch.linalg.norm((x - y).view(x.shape[0], -1), ord=2, dim=1)
+
+    def ssim(self, x, y, **kwargs):
+        return 1. - structural_similarity_index_measure(x, y, reduction='none', **kwargs)
+
+    def lap1(self, x, y, level_weights=None):
+
+        max_level = int(torch.ceil(torch.log2(torch.as_tensor(min(x.shape[-1], x.shape[-2])) / 8)))
+        xlp = blp(x, max_level=max_level, border_type='reflect', align_corners=False)
+        ylp = blp(y, max_level=max_level, border_type='reflect', align_corners=False)
+
+        xlp2 = [xp[:, :, :x.shape[-2] // 2 ** ii, :x.shape[-1] // 2 ** ii] for ii, xp in enumerate(xlp)]
+        ylp2 = [yp[:, :, :x.shape[-2] // 2 ** ii, :x.shape[-1] // 2 ** ii] for ii, yp in enumerate(ylp)]
+
+        l1_diffs = torch.cat(
+            [torch.linalg.norm((xp - yp).reshape(xp.shape[0], -1), ord=1, dim=1, keepdim=True)
+             for ii, (xp, yp) in enumerate(zip(xlp2, ylp2))],
+            dim=1)
+
+        if level_weights is None:
+            lp_weights = 2. ** (2 * torch.arange(max_level, dtype=x.dtype, device=x.device))
+        else:
+            lp_weights = level_weights
+        return torch.sum(l1_diffs * lp_weights[None, :], dim=1)
+
+
 def dist(x, y, distance='euclidean'):
 
-    if 'euclid' in distance.lower():
+    if callable(distance):
+        return distance(x, y)
+
+    elif 'euclid' in distance.lower():
         return torch.linalg.norm((x-y).view(x.shape[0], -1), ord=2, dim=1)
 
     elif 'ssim' in distance.lower():
@@ -256,6 +303,7 @@ def pdist2_batch(x, y=None, distance='euclidean', batch_size=128, compute_device
         idx_dl = torch.utils.data.DataLoader(idx_ds, batch_size=batch_size, shuffle=False)
 
     tmp = torch.empty((len(iix),), dtype=x.dtype, device=compute_device)
+    dist_metric = DistanceMetric(distance=distance)
 
     if progress:
         pbar = trange(len(iix), unit="Element", ncols=120, position=0, leave=True)
@@ -265,7 +313,7 @@ def pdist2_batch(x, y=None, distance='euclidean', batch_size=128, compute_device
     for batch in idx_dl:
         i1, i2 = batch[0], batch[1]
         xb, yb = x[i1].to(compute_device), y[i2].to(compute_device)
-        tmp[ioff:ioff + len(i1)] = dist(xb, yb, distance=distance)
+        tmp[ioff:ioff + len(i1)] = dist_metric(xb, yb)
         ioff += len(i1)
         if progress: pbar.update(len(i1))
 
