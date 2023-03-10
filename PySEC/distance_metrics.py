@@ -54,7 +54,6 @@ if __name__ == '__main__':
     debug_var = 1
     test = dm(x, y)
 
-
     dm = DistanceMetric('euclid')
 
     dm = DistanceMetric('ssim')

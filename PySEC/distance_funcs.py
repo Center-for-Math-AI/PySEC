@@ -35,7 +35,6 @@ def self_pair_dist_p2(x):
     return torch.sqrt((dmat_full * dmat_full).sum(dim=-1))
 
 
-
 class DistanceMetric:
     """ Wrapper class for distance metrics
     """
@@ -209,8 +208,6 @@ def pdist2(x, y=None, distance='euclidean', batch_size=128, compute_device=None,
             del tmp
             if progress: pbar.close()
 
-
-
     elif 'lap' in distance.lower():
 
         if y is None:
@@ -243,7 +240,6 @@ def pdist2(x, y=None, distance='euclidean', batch_size=128, compute_device=None,
         del tmp
         if progress: pbar.close()
 
-
     else:
         raise ValueError('Unknown distance metric')
 
@@ -263,8 +259,6 @@ def knn_expensive(x, y, k, **dist_args):
     dx = pdist2(x, y, **dist_args)
     kn = min(k, dx.shape[1])
     return torch.topk(dx, kn, largest=False)
-
-
 
 
 def pdist2_batch(x, y=None, distance='euclidean', batch_size=128, compute_device=None, progress=False):
@@ -329,4 +323,35 @@ def pdist2_batch(x, y=None, distance='euclidean', batch_size=128, compute_device
 
     if progress: pbar.close()
     return ret
+
+
+if __name__ == '__main__':
+
+    mydist = 'euclidean'
+    dm = DistanceMetric()
+    x = torch.rand((10, 1, 40, 40))
+    y = torch.rand_like(x)
+    debug_var = 1
+    t0 = dist(x, y, mydist)
+    t1 = dm(x, y)
+    torch.allclose(t0, t1, atol=1e-10, rtol=1e-10)
+
+    t0 = pdist2(x.view((x.shape[0], -1)), y.view(y.shape[0], -1), mydist)
+    t1 = pdist2_batch(x, y, distance=mydist)
+    torch.allclose(t0, t1, atol=1e-8, rtol=1e-6)
+
+    mydist = 'lap1'
+    dm = DistanceMetric()
+    t0 = pdist2(x, y, distance=mydist)
+    t1 = pdist2_batch(x, y, distance=mydist)
+    torch.allclose(t0, t1, atol=1e-10, rtol=1e-10)
+
+    mydist = 'ssim'
+    dm = DistanceMetric()
+    t0 = pdist2(x, y, distance=mydist)
+    t1 = pdist2_batch(x, y, distance=mydist)
+    torch.allclose(t0, t1, atol=1e-10, rtol=1e-10)
+
+
+    debug_var = 1
 
