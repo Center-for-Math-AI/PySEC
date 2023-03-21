@@ -116,7 +116,7 @@ def cidm(x, nvars=None, k=None, k2=None, tuning_method=None, **knn_args):
                                                   dtype=d_sparse.dtype,
                                                   device=d_sparse.device))
         l, u = torch.lobpcg(d_eig, k=nvars, largest=True)
-        l += sigma
+        l = l.clone() + torch.tensor(sigma, dtype=l.dtype, device=l.device) # lobpcg returns a view, can't add in place
         KP.lheat = l
         KP.l = torch.abs(torch.log(l)) / epsilon
         KP.u = Dinv @ u
