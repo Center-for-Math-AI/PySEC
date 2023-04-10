@@ -60,6 +60,12 @@ class DistanceMetric:
             lp_weights = level_weights
         return torch.sum(l1_diffs * lp_weights[None, :], dim=1)
 
+    def lapeuc(self, x, y, euclid_weight=0.5, level_weights=None):
+        if euclid_weight < 0.0 or euclid_weight > 1.0:
+            raise ValueError(f'Relative euclid_weigtht must be in range [0, 1]')
+        lap1_weight = 1.0 - euclid_weight
+        return 2. * (euclid_weight * self.euclidean(x, y) + lap1_weight * self.lap1(x, y, level_weights))
+
 
 def pdist2(x, y=None, distance='euclidean', batch_size=128, compute_device=None, progress=False):
     """ Pairwise distance function, batched

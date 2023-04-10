@@ -2,7 +2,7 @@ import numpy as np
 import os, torch
 from math import ceil, log
 import pytest
-from PySEC.nystrom_cidm import cidm, nystrom
+from PySEC.nystrom_cidm import cidm, nystrom, nystrom_grad
 from PySEC.generate_data import *
 from PySEC.sec_utils import compare_eigenpairs
 
@@ -195,6 +195,33 @@ def test_nystrom_torus():
         assert torch.allclose(
             rp.reshape(-1), torch.as_tensor(rm).reshape(-1), atol = atol, rtol = rtol
         )
+
+
+
+def test_nystrom_grad_circle():
+    num_points = 120
+    data, iparams = generate_circle(num_points)
+    u, l, peq, qest, eps, dim, KP = cidm(data.T)
+
+    x2 = data[:, :: num_points // 4].T
+    retp = nystrom_grad(x2, KP)
+    retm = eng.NystromCIDMgrad(
+        matlab.double(x2.clone().numpy().T),
+        eng.struct(dataclass2matlab_dict(KP)),
+        nargout=5,
+    )
+
+    gup, gum = retp[3], torch.as_tensor(retm[3])
+    gdp, gdm = retp[4], torch.as_tensor(retm[4])
+
+    # for v1: first 10 of gdp matches gdm2 = torch.permute(gdm, [1, 2, 0]) # not reshape_fortran!
+
+    debug_var = 1
+
+    for rp, rm in zip(retp, retm):
+        print( torch.allclose(
+            rp.reshape(-1), torch.as_tensor(rm).reshape(-1), atol=atol, rtol=rtol
+        ))
 
 
 # @TODO: nystrom a chip and make sure you get the same chip back

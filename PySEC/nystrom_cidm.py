@@ -1,4 +1,5 @@
 import torch
+from torch import permute as tp
 from torch.sparse import mm as smsm
 from math import ceil, log
 from PySEC.distance_funcs import self_knn_expensive, knn_expensive
@@ -174,4 +175,102 @@ def nystrom(x, KP, **knn_args):
     u = torch.einsum('ij,j->ij', d_sparse @ KP.u, 1./KP.lheat)
 
     return u, peq, qest
+# end def nystrom
+
+def nystrom_grad(x, KP, **knn_args):
+
+    if len(x.shape) < len(KP.X.shape):
+        shape_diff = len(KP.X.shape) - len(x.shape)
+        xknn = x.view(*[1,]*shape_diff, *KP.X.shape[shape_diff:])
+    else:
+        xknn = x
+
+    N, n = xknn.shape[0], xknn[0].nelement()
+    k = KP.k
+    k2 = KP.k2
+
+    dx, dxi = knn_expensive(xknn, KP.X, k, **knn_args)
+
+    # CkNN Normalization
+    rho = torch.mean(dx[:, 1:k2], dim=1)
+    dx = dx * dx / (repmat(rho, [k]) * KP.rho[dxi])
+
+    # M, n = KP.X.shape
+    # N, n = x.shape
+    # N, k = dxi.shape
+    # N, k, n = KP.X[dxi].shape
+    amb_shape = xknn.shape[1:]
+    eps = torch.finfo(x.dtype).eps
+    # v1 = xknn.view((N, 1, n)).expand(N, k, n) - KP.X[dxi].view(N, k, -1)
+    v1 = xknn[:, None, :] - KP.X[dxi].view(N, k, -1) # shape [N, k, n], use view to flatten ambient just in case
+    v1 = v1 / (torch.sum(v1*v1, dim=-1) + eps)[:, :, None] # shape [N, k, n]
+
+    # N, k2-1, n = KP.X[dxi[:, 1:k2]].shape
+    v2 = xknn[:, None, :] - KP.X[dxi[:, 1:k2]]
+    v2 = torch.sum(v2, dim=1)
+    v2 = v2 / (torch.sum(v2*v2, dim=-1) + eps)[:, None] #[:, :, None] # shape [N, n]
+
+    gradd = dx[:, :, None] * (2*v1 - v2[:, None, :]) # shape [N, k, n]
+
+
+    # size(X) = [n,M]
+    # size(KP.X) = [n,N]
+    # size(KP.X(:, inds)) = [n, k * M]
+    # v1 =
+    #   repmat(X, [1 1 k]) -
+    #   permute(
+    #       reshape(KP.X(:, inds), [n k N]),
+    #   [1 3 2]);
+    # shape1: [n M k] - shape2: [n N k]
+    # v1 = v1. / repmat(sum(v1. ^ 2) + eps, [n 1 1]);
+
+
+    # v2 = repmat(X, [1 1 k2 - 1]) - permute(reshape(KP.X(:, inds(2: k2,:))',[n k2-1 N]),[1 3 2]);
+    # shape1: n, N, k2-1 - shape2: n, N, k2-1
+    # v2 = repmat(sum(v2, 3), [1 1 k]);
+    # v2 = v2. / repmat(sum(v2. ^ 2) + eps, [n 1 1]);
+    # gradd = repmat(reshape(d',[1 N k]),[n 1 1]).*(2*v1 - v2); % shape [n, N, k]
+
+    # RBF kernel
+    dx = torch.exp(-dx / (2 * KP.epsilon)) # shape [N, k]
+
+    m = KP.lheat.shape[0] # eig size
+    dx_sumk = dx.sum(dim=1)
+
+    # gradd = dx[:, :, None] * (2*v1 - v2) # shape [N, k, n]
+    gradu = torch.sum(dx[:, :, None] * gradd, dim=1) # sum out k, shape [N, n]
+    gradu = gradu / torch.sum(dx, dim=1)[:, None] # shape [N, n]
+
+    gradu = gradu[:, None, :] - gradd # shape [N, k, n]
+
+    uu = repmat(KP.u[dxi, :], [n,]) # shape [N, k, m, n]
+
+    gradu = torch.sum(uu * (dx[:, :, None] * gradu)[:, :, None, :], dim=1)
+    gradu = gradu / torch.sum(dx, dim=1)[:, None, None]
+
+    gradu = gradu / KP.lheat[None, :, None]
+
+
+    coo = torch.stack((repmat(torch.arange(N, device=x.device), [k]).reshape(-1),
+                       dxi.reshape(-1)))
+    d_sparse = torch.sparse_coo_tensor(coo, dx.reshape(-1), [N, KP.X.shape[0]])
+    d_sparse = d_sparse.coalesce()
+
+    # peq = torch.sparse.sum(d_sparse, dim=1).to_dense()  #
+    peq = torch.sum(dx, dim=1)  # don't need sparse
+    qest = peq / (
+        N * torch.pow(rho, KP.dim) * (2 * torch.pi * KP.epsilon) ** (0.5 * KP.dim)
+    )
+
+    D = sparse_diag(1 / peq)
+    tmp = smsm(D, d_sparse)
+    d_sparse = tmp
+    d_sparse = d_sparse.coalesce()
+
+    # Linv = sparse_diag(1 / KP.lheat)
+    #u = smsm(Linv.t(), smsm(d_sparse, KP.u).t()).t()
+    u = torch.einsum('ij,j->ij', d_sparse @ KP.u, 1./KP.lheat)
+
+    debug = v1
+    return u, peq, qest, gradu, debug
 # end def nystrom
