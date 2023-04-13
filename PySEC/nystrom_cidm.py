@@ -202,15 +202,20 @@ def nystrom_grad(x, KP, **knn_args):
     amb_shape = xknn.shape[1:]
     eps = torch.finfo(x.dtype).eps
     # v1 = xknn.view((N, 1, n)).expand(N, k, n) - KP.X[dxi].view(N, k, -1)
-    v1 = xknn[:, None, :] - KP.X[dxi].view(N, k, -1) # shape [N, k, n], use view to flatten ambient just in case
+    v1 = xknn[:, None, :] - KP.X[dxi].view([N, k, n]) # shape [N, k, n], use view to flatten ambient just in case
     v1 = v1 / (torch.sum(v1*v1, dim=-1) + eps)[:, :, None] # shape [N, k, n]
 
     # N, k2-1, n = KP.X[dxi[:, 1:k2]].shape
-    v2 = xknn[:, None, :] - KP.X[dxi[:, 1:k2]]
-    v2 = torch.sum(v2, dim=1)
-    v2 = v2 / (torch.sum(v2*v2, dim=-1) + eps)[:, None] #[:, :, None] # shape [N, n]
+    # v2 = xknn[:, None, :] - KP.X[dxi[:, 1:k2]] # shape [N, k2-1, n]
+    v2 = xknn.view([N, 1, n]).expand([N, k2-1, n]) - KP.X[dxi[:, 1:k2]].view([N, k2-1, n]) # shape [N, k2-1, n]
+    debug = KP.X[dxi[:, 1:k2]].clone() #.view([N, k2-1, n]).clone()
+    # debug = dxi[:, 1:k2].clone()
+    v2 = torch.sum(v2, dim=1).view([N, 1, n]).expand([N, k, n]) # shape [N, k, n]
+    v2 = v2 / (torch.sum(v2*v2, dim=-1) + eps)[:, :, None] # shape [N, k, n]
+    # v2 = v2.view([N, 1, n]).expand([N, k, n])
 
-    gradd = dx[:, :, None] * (2*v1 - v2[:, None, :]) # shape [N, k, n]
+    # gradd = dx[:, :, None] * (2*v1 - v2[:, None, :]) # shape [N, k, n]
+    gradd = dx[:, :, None] * (2*v1 - v2) # shape [N, k, n]
 
 
     # size(X) = [n,M]
@@ -271,6 +276,6 @@ def nystrom_grad(x, KP, **knn_args):
     #u = smsm(Linv.t(), smsm(d_sparse, KP.u).t()).t()
     u = torch.einsum('ij,j->ij', d_sparse @ KP.u, 1./KP.lheat)
 
-    debug = v1
+    # debug = tmpret
     return u, peq, qest, gradu, debug
 # end def nystrom

@@ -20,11 +20,18 @@ function [u,peq,qest,gradu, debug] = NystromCIDMgrad(X,KP)
     d = (d.^2)./(repmat(rho,k,1).*KP.rho(inds));
     
     if (nargout>3) %%% compute the gradient of the squared distance
-        v1 = repmat(X,[1 1 k])-permute(reshape(KP.X(:,inds),[n k N]),[1 3 2]);
-        v1 = v1./repmat(sum(v1.^2)+eps,[n 1 1]);
-        v2 = repmat(X,[1 1 k2-1])-permute(reshape(KP.X(:,inds(2:k2,:))',[n k2-1 N]),[1 3 2]);
-        v2 = repmat(sum(v2,3),[1 1 k]);
-        v2 = v2./repmat(sum(v2.^2)+eps,[n 1 1]);
+        v1 = repmat(X,[1 1 k])-permute(reshape(KP.X(:,inds),[n k N]),[1 3 2]); % shape [n N k]
+        v1 = v1./repmat(sum(v1.^2)+eps,[n 1 1]); % shape [n N k]
+        tmp = permute( ...
+                reshape( ...
+                    KP.X(:,inds(2:k2,:))', ...
+                    [n k2-1 N] ...
+                ), [1 3 2] ...
+            ); % shape [n N k2-1]
+        v2 = repmat(X,[1 1 k2-1]) - tmp;
+        %tmp = v2;
+        v2 = repmat(sum(v2,3),[1 1 k]); % shape [n N k]
+        v2 = v2./repmat(sum(v2.^2)+eps,[n 1 1]); % shape [n N k]
         gradd = repmat(reshape(d',[1 N k]),[n 1 1]).*(2*v1 - v2); % shape [n N k]
     end
     
@@ -57,7 +64,8 @@ function [u,peq,qest,gradu, debug] = NystromCIDMgrad(X,KP)
     u = full(d*KP.u*Linv);
 
     if (nargout == 5)
-        debug = v1;
+        %debug = inds(2:k2,:);
+        debug = tmp;
     end
 
 end
