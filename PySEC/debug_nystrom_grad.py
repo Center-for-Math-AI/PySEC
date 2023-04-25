@@ -44,19 +44,18 @@ def dataclass2matlab_dict(dclass):  # dclass = dataclass
 
 
 
-
 # test = gd.generate_circle(100)
-test = gd.generate_noisy_circle(101, 0.01)
+test = gd.generate_noisy_circle(21, 0.01)
 points = test[0].t()
 t = test[1]
 angs = torch.atan2(t[1], t[0])
-ss = slice(None, None, 4)
-xsub = points[ss, :]
-tsub = angs[ss]
+xs = slice(None, None, 11)
+xsub = points[xs, :]
+tsub = angs[xs]
 
 
 # def cidm(x, nvars=None, k=None, k2=None, tuning_method=None, **knn_args):
-u0, l0, peq0, qest0, eps0, dim0, KP = cidm(points)
+u0, l0, peq0, qest0, eps0, dim0, KP = cidm(points, k=7, k2=5)
 Xhat = u0.T @ torch.diag(peq0) @ \
             points.view(points.shape[0], -1).to(dtype=u0.dtype, device=u0.device)
 
@@ -155,6 +154,17 @@ aax[1].set_title('matlab')
 plt.show(), plt.close(fig)
 
 torch.allclose(debug.to(float), debugm.to(float)-1.)
+
+
+iof = 0
+colors = ['tab:red', 'tab:blue', 'tab:green', 'tab:purple']
+fig, aax = plt.subplots(1, 2, figsize=(10, 8))
+for ii, ax in enumerate(aax.flat):
+    ax.plot(xsub[ii, 0], xsub[ii, 1], color=colors[0], linestyle='', marker='o', label='data', alpha=0.8)
+    ax.plot(debug[ii, :, 0], debug[ii, :, 1], color=colors[0], linestyle='', marker='v', markerfacecolor='none', label='python', alpha=0.6)
+    ax.plot(debugm[ii, :, 0], debugm[ii, :, 1], color=colors[1], linestyle='', marker='^', markerfacecolor='none', label='matlab', alpha=0.6)
+    ax.legend()
+plt.show()
 
 
 debug_var = 1
