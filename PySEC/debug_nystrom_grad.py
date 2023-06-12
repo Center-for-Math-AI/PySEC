@@ -45,11 +45,11 @@ def dataclass2matlab_dict(dclass):  # dclass = dataclass
 
 
 # test = gd.generate_circle(100)
-test = gd.generate_noisy_circle(21, 0.01)
+test = gd.generate_noisy_circle(101, 0.01)
 points = test[0].t()
 t = test[1]
 angs = torch.atan2(t[1], t[0])
-xs = slice(None, None, 11)
+xs = slice(None, None, 5)
 xsub = points[xs, :]
 tsub = angs[xs]
 
@@ -68,22 +68,22 @@ n1 = min(80, KP.k)  # use kNN size capped at 80
 u1, l1, d1, _, h1, _ = del1_as_einsum(u0, l0, torch.diag(peq0), n1)
 
 
-u2, peq2, qest2, gradu, debug = nystrom_grad(xsub, KP)
+u2, peq2, qest2, gradu = nystrom_grad(xsub, KP)
 debug_var = 1
 
 retm = eng.NystromCIDMgrad(
     matlab.double(xsub.clone().numpy().T),
     eng.struct(dataclass2matlab_dict(KP)),
-    nargout=5,
+    nargout=4,
 )
 # u2m, peq2m, qest2m, gradum, debugm = retm
 u2m = torch.as_tensor(retm[0], dtype=u2.dtype)
 gradum = torch.as_tensor(retm[3], dtype=gradu.dtype).permute([1, 2, 0])
-perm_list = list(range(1,len(debug.shape))) + [0,]
-# debugm = torch.as_tensor(retm[4], dtype=float) #dtype=debug.dtype).permute(perm_list)
-# debugm = torch.as_tensor(retm[4], dtype=debug.dtype).permute(perm_list)
-# debugm = reshape_fortran(torch.as_tensor(retm[4], dtype=debug.dtype), debug.shape)
-debugm = torch.as_tensor(retm[4], dtype=debug.dtype).reshape(debug.shape)
+# perm_list = list(range(1,len(debug.shape))) + [0,]
+# # debugm = torch.as_tensor(retm[4], dtype=float) #dtype=debug.dtype).permute(perm_list)
+# # debugm = torch.as_tensor(retm[4], dtype=debug.dtype).permute(perm_list)
+# # debugm = reshape_fortran(torch.as_tensor(retm[4], dtype=debug.dtype), debug.shape)
+# debugm = torch.as_tensor(retm[4], dtype=debug.dtype).reshape(debug.shape)
 
 
 # A = torch.linalg.solve(u0[:, 1:3], points[:, 0:2])

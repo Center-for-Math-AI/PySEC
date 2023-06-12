@@ -73,7 +73,7 @@ plt.show()
 debug_var = 1
 
 
-u2, peq2, qest2, gradu, debug = nystrom_grad(xsub, KP)
+u2, peq2, qest2, gradu = nystrom_grad(xsub, KP)
 
 
 fig, aax = plt.subplots(2, 2, figsize=(6, 6))
@@ -88,9 +88,6 @@ for ii, ax in enumerate(aax.flat):
 
 fig.tight_layout()
 plt.show(), plt.close(fig)
-
-
-
 
 
 debug_var = 1
