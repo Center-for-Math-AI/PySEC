@@ -4,13 +4,13 @@ import numpy as np
 from math import ceil
 import matplotlib.pyplot as plt
 from PySEC import generate_data as gd
-from PySEC.nystrom_cidm import cidm, nystrom, nystrom_grad
+from PySEC.nystrom_cidm import cidm, nystrom, nystrom_grad, nystrom_gradu
 from PySEC.del1 import del1_as_einsum
 from PySEC.sec_utils import reshape_fortran
 
 
 # test = gd.generate_circle(100)
-test = gd.generate_noisy_circle(180, 1e-8)
+test = gd.generate_noisy_circle(180, 1e-2)
 points = test[0].t()
 t = test[1]
 angs = torch.atan2(t[1], t[0]) % (2 * torch.pi)
@@ -91,3 +91,12 @@ plt.show(), plt.close(fig)
 
 
 debug_var = 1
+
+
+u22, peq22, qest22, gradu2 = nystrom_gradu(xsub, KP)
+
+fig, ax = plt.subplots()
+ax.scatter(*u2[:, 1:3].t().cpu())
+gradu2i = gradu2[:, 1, :]
+ax.quiver(*u2[:, 1:3].t().cpu(), *gradu2i[:, 1:3].t().cpu(), color='tab:red')
+plt.show()
