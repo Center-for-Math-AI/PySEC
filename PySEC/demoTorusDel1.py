@@ -104,6 +104,7 @@ tan_ss = slice(None, None, 7)
 for view_az in range(0, 180, 1000):
     fig = plt.figure(figsize=(10, 18))
     plot_vecs = [1, 2, 3]
+    plot_vecs = [3, 4, 1]
     ax = fig.add_subplot(4, 2, 1, projection='3d')
     sax = ax.scatter(*geom.u[:, plot_vecs].t().cpu(), c=gip[:, 1], cmap='hsv', s=3)
     scbar = fig.colorbar(sax, ticks=list(range(int(gip[:, 1].min()), int(gip[:, 1].max() + 1), 5)),
