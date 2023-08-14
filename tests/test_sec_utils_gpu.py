@@ -77,6 +77,43 @@ def test_pdist2_xy_gpu():
             dxys = sdist.cdist(x.numpy(), y.numpy())
             assert torch.allclose(dxy, torch.tensor(dxys, dtype=dtype), atol=atol, rtol=rtol)
 
+
+def test_pdist2_ssim_gpu():
+
+    device, (atol, rtol) = devices[0], dtype_tols[0]
+
+    x = torch.rand((100, 1, 40, 40))
+    y = torch.rand((101, 1, 40, 40))
+    ret = pdist2(x, y, distance='ssim')
+    assert (ret.shape[0] == x.shape[0] and ret.shape[1] == y.shape[0])
+    assert ret.device == x.device
+
+    # ensure compute_device doesn't change return device
+    ret = pdist2(x, y, distance='ssim', compute_device=device)
+    assert ret.device == x.device
+
+    x, y = x.to(device), y.to(device)
+    ret = pdist2(x, y, distance='ssim', compute_device='cpu')
+    assert ret.device == x.device
+
+    ret = pdist2(x, y, distance='ssim', compute_device=device)
+    assert ret.device == x.device
+
+    ret = pdist2(x, y, distance='ssim')
+    assert ret.device == x.device
+
+
+    retx0 = pdist2(x, distance='ssim')
+    retxx = pdist2(x, x, distance='ssim')
+    assert (torch.allclose(retx0, retxx, atol=atol, rtol=rtol))
+
+    # all diags are zero
+    assert (torch.allclose(torch.diag(retxx), torch.zeros(x.shape[0], device=retxx.device)))
+
+    # all off-diags are non-zero (should be true if all x[:] are different)
+    assert ((retxx.flatten()[1:].view(x.shape[0] - 1, x.shape[0] + 1)[:, :-1].reshape(-1) > 1.e-8).all())
+
+
 def test_self_knn_expensive():
 
     k = 4

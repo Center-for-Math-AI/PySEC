@@ -75,6 +75,23 @@ def del1_as(u, l, D, n=None):
     # We can now compute the eigenforms of the 1-Laplacian in this basis
     L, U = eig_wrap(D1proj, Gproj, sort_type="smallest mag")
 
+    # # [Ut2,St,~]=svd(Gproj);
+    # St = diag(St);
+    # NN2 = find(St/St(1,1) < 1e-3,1);
+    # if (~isempty(NN2))
+    #     NN=NN2;
+    # end
+    # Ut2 = Ut2(:,1:NN);
+    # St = diag(1./sqrt(St(1:NN)));
+    #
+    # %%% We can now compute the eigenforms of the 1-Laplacian in this basis
+    # [U,L] = eig(St*Ut2'*D1proj*Ut2*St);
+    # [L,sinds]=sort(abs(diag(L)));
+    # U = real(U(:,sinds));
+    # %%% Finally we compute the frame coefficients of the eigenforms
+    # U = Ut*Ut2*St*U;
+
+
     # Finally we compute the frame coefficients of the eigenforms
     U = torch.matmul(Ut[:, :NN], U.real)
     return U, L, D1, G, H, cijk
@@ -128,7 +145,7 @@ def del1_as_einsum(u, l, D, n=None):
     # D1 is the energy matrix for the 1-Laplacian and G is the Hodge
     # Grammian matrix.  The sum D1+G is the Sobolev H^1 Grammian.  This
     # SVD computes the frame representations of a basis for H^1.
-    Ut, St, _ = torch.svd(D1 + G, compute_uv=True)
+    Ut, St, _ = torch.linalg.svd(D1 + G, full_matrices=False)
 
     # We truncate the basis to remove the very high H^1 energy forms
     # which are spurious due to the redundant frame representation (D1
@@ -140,11 +157,26 @@ def del1_as_einsum(u, l, D, n=None):
     D1proj = 0.5 * (D1proj + D1proj.T)
     Gproj = Ut[:, :NN].T @ G @ Ut[:, :NN]
     Gproj = 0.5 * (Gproj + Gproj.T)
+    Ut = Ut[:, :NN]
 
     # We can now compute the eigenforms of the 1-Laplacian in this basis
-    L, U = eig_wrap(D1proj, Gproj, sort_type="smallest mag")
+    # L, U = eig_wrap(D1proj, Gproj, sort_type="smallest mag")
 
     # Finally we compute the frame coefficients of the eigenforms
-    U = torch.matmul(Ut[:, :NN], U.real)
+    # U = torch.matmul(Ut[:, :NN], U.real)
+
+    Ut2, St, _ = torch.linalg.svd(Gproj, full_matrices=False)
+    NN2 = torch.where(St / St[0] < 1.0e-3)[0] #[0] + 1
+    if len(NN2) > 0:
+        NN = NN2[0] + 1
+    Ut2 = Ut2[:, :NN] # tensors are (row, column), svd returns singular vecs as columns of U
+    St = torch.diag(1. / torch.sqrt(St[:NN]))
+
+    Ut2St = Ut2 @ St
+    L, U = torch.linalg.eigh(Ut2St.t() @ D1proj @ Ut2St) # eigenvecs are columns
+    Lt, isort = torch.sort(torch.abs(L), descending=False)
+    U = U[:, isort]
+    U = Ut @ Ut2St @ U
+
     return U, L, D1, G, H, cijk
 # end def del1_as_einsum(u, l, D, n=None):
