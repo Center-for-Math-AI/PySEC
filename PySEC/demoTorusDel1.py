@@ -8,6 +8,9 @@ from PySEC.nystrom_cidm import cidm, nystrom, nystrom_grad, nystrom_gradu
 from PySEC.del1 import del1_as_einsum
 from PySEC.sec_utils import reshape_fortran
 
+torch.backends.cudnn.deterministic = True  # makes batch norm deterministic
+torch.manual_seed(0)
+
 # def divergence(y, x):
 #     div = 0.
 #     for i in range(y.shape[-1]):
@@ -146,41 +149,35 @@ for view_az in range(0, 180, 1000):
     plt.show(), plt.close(fig)
 
 
+uvec = 7
+usize = 20
+umatrix = reshape_fortran(geom.h1.t() @ geom.u1[:, uvec], (num_vecs, geom.n1, geom.n1))
+umatrices = torch.permute(geom.h1.t() @ geom.u1[:, :usize], [1, 0])
+umatrices = umatrices.reshape((usize, geom.n1, geom.n1)).transpose(1, 2)
+torch.allclose(umatrices[uvec].ravel(), umatrix.ravel())
+# vectorfields = torch.tensordot(
+#     geom.u[:, :geom.n1],
+#     torch.tensordot(umatrices, geom.Xhat[:geom.n1], dims=1),
+#     dims=[[-1], [-2]])
+vectorfields = torch.tensordot(
+    geom.u[:, :geom.n1],
+    umatrices @ geom.Xhat[:geom.n1],
+    dims=[[-1], [-2]])
+
+
+
 # plot in intrinsic coords
 view_az, view_dl = 20, 40
 tan_ss = slice(None, None, 7)
 for view_az in range(0, 180, 1000):
     fig = plt.figure(figsize=(10, 18))
-    plot_vecs = [1, 2, 5]
-    ax = fig.add_subplot(4, 2, 1, projection='3d')
-    sax = ax.scatter(*data, c=ip[1], cmap='hsv', s=3)
-    scbar = fig.colorbar(sax, ticks=list(range(int(gip[:, 1].min()), int(gip[:, 1].max() + 1), 5)),
-                         shrink=0.7, fraction=0.03, panchor=False)
-    scbar.ax.set_xlabel('Az', labelpad=10)
-    ax.view_init(view_dl, view_az), ax.set_xticklabels([]), ax.set_yticklabels([]), ax.set_zticklabels([])
-    ax.set_title('Az')
-
-    ax = fig.add_subplot(4, 2, 2, projection='3d')
-    sax = ax.scatter(*data, c=ip[0], cmap='hsv', s=3)
-    scbar = fig.colorbar(sax, ticks=list(range(int(gip[:, 0].min()), int(gip[:, 0].max() + 1), 5)),
-                         shrink=0.7, fraction=0.03, panchor=False)
-    scbar.ax.set_xlabel('DL', labelpad=10)
-    ax.view_init(view_dl, view_az), ax.set_xticklabels([]), ax.set_yticklabels([]), ax.set_zticklabels([])
-    ax.set_title('DLA')
-
-    vec_fields = []
-    for uvec in range(6):
-        umatrix = reshape_fortran(geom.h1.t() @ geom.u1[:, uvec], (1, geom.n1, geom.n1))
-        vectorfield = torch.tensordot(geom.u[:, :geom.n1], torch.tensordot(umatrix, geom.Xhat[:geom.n1], dims=1),
-                                      dims=[[-1], [-2]], )  # sneaky logic, handles len(ushape) == 2 or len(ushape) == 3
-        vectorfield = vectorfield.view(vectorfield.shape[0], num_vecs, *geom.KP.X.shape[1:])
-        vec_fields.append(vectorfield)
-
-        ax = fig.add_subplot(4, 2, 3 + uvec, projection='3d')
+    for uvec in range(12):
+        vectorfield = vectorfields[:, uvec]
+        ax = fig.add_subplot(4, 3, 1 + uvec, projection='3d')
         ax.scatter(*data[:, tan_ss], c='gray', s=5, alpha=0.6)
         ax.view_init(view_dl, view_az), ax.set_xticklabels([]), ax.set_yticklabels([]), ax.set_zticklabels([])
         tan_len_fac = 1.e1 / torch.linalg.norm(vectorfield).item()
-        tax = ax.quiver(*data[:, tan_ss], *vectorfield[tan_ss, 0, :].t(),
+        tax = ax.quiver(*data[:, tan_ss], *vectorfield[tan_ss, :].t(),
                         length=2 * tan_len_fac, normalize=False, color='red', arrow_length_ratio=0.4, alpha=0.6, )
         ax.set_title(f'|Del1 Tan({uvec})|: {torch.linalg.norm(vectorfield):.2e}')
 

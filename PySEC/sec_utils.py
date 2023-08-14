@@ -49,7 +49,8 @@ def eig_wrap(a, b, n=None, sort_type="largest mag"):
     k = a.shape[0] if n is None else n
     descending = True if sort_type.lower().startswith("l") else False
 
-    w, vr = eig(a.cpu().numpy(), b=b.cpu().numpy(), left=False, right=True)
+    # w, vr = eig(a.cpu().numpy(), b=b.cpu().numpy(), left=False, right=True)
+    w, vr = eigh(a.cpu().numpy(), b=b.cpu().numpy()) # cannot do eigh becuase b is not pos def
     wt = torch.as_tensor(w.real, dtype=a.dtype)
     if "mag" in sort_type.lower() or "abs" in sort_type.lower():
         wt = torch.abs(wt)
@@ -179,3 +180,26 @@ def estimate_dimension(d, epsilon, diagonals=None):
 
     return dim, ddim
 # end def estimate_dimension
+
+
+def pseudo_sqrt_inv(mat, hermitian=True):
+
+    if not hermitian:
+        # Note: can be done with SVD, just not implemented
+        raise NotImplementedError('Only implemented for hermitian')
+
+    evals, evecs = torch.linalg.eigh(mat) # evals is in ascending order (opposite of torch.svd)
+    nneg = torch.where(evals > 1.e-6)[[0]]
+
+    dd = torch.zeros_like(evals)
+    dd[nneg] = 1. / torch.sqrt(evals[nneg])
+    return evecs @ torch.diag(dd) @ evecs.t()
+
+
+
+
+
+
+
+
+
