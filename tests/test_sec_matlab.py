@@ -139,6 +139,7 @@ def test_del0_torus():
 
 
 def test_del1_as_circle():
+    """ Note: doesn't pass after Del1 with pseudo inv sqrt gen eig """
     num_points = 101
     eig_size = 100
     sec_size = 20
@@ -151,6 +152,7 @@ def test_del1_as_circle():
 
 
 def test_del1_as_torus():
+    """ Note: doesn't pass after Del1 with pseudo inv sqrt gen eig """
     num_points = 5 * 10**3
     eig_size = 100
     sec_size = 20
