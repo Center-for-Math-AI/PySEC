@@ -4,7 +4,7 @@ import numpy as np
 from math import ceil
 import matplotlib.pyplot as plt
 from PySEC import generate_data as gd
-from PySEC.nystrom_cidm import cidm, nystrom, nystrom_grad, nystrom_gradu
+from PySEC.nystrom_cidm import cidm, nystrom #, nystrom_grad, nystrom_gradu
 from PySEC.del1 import del1_as_einsum
 from PySEC.sec_utils import reshape_fortran
 
