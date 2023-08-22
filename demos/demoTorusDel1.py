@@ -8,7 +8,7 @@ from PySEC.nystrom_cidm import cidm, nystrom #, nystrom_grad, nystrom_gradu
 from PySEC.del1 import del1_as_einsum
 from PySEC.sec_utils import reshape_fortran
 
-torch.backends.cudnn.deterministic = True  # makes batch norm deterministic
+torch.backends.cudnn.deterministic = True  #
 torch.manual_seed(0)
 
 # def divergence(y, x):

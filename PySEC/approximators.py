@@ -5,7 +5,7 @@ from PySEC.del0 import del0
 from PySEC.del1 import del1_as_einsum
 from typing import List, Union
 
-class ManifoldApproximators():
+class ManifoldMethods():
     """ wrapper for manifold approximators
     Note: if you define your own manifold approximator the return style needs to be:
     @TODO: match del0 and cidm signatures then document
@@ -20,7 +20,7 @@ class ManifoldApproximators():
                 raise ValueError(f'Unknown manifold fit method: {method}')
 
     def __call__(self, *args, **kwargs):
-        return self.distance(*args, **kwargs)
+        return self.method(*args, **kwargs)
 
     def cidm(self, *args, **kwargs):
         return cidm(*args, **kwargs)
@@ -30,14 +30,16 @@ class ManifoldApproximators():
 
 
 class ManifoldPoints():
-    """ Holds the information about some batched points in the eigen basis, with option to embed
+    """ Holds the information about some batched points in a manifold's eigen basis, with option to embed
     This is done for intermediate storage because mapping to the eigen basis is expensive
     """
     def __init__(self, ubasis: torch.Tensor):
         self.ubasis = ubasis
 
     def embed(self, embedding: torch.Tensor):
-        """ linear map """
+        """ linear map
+        :param embedding: shape == [ubasis, embedding_dim], ubasis is the size of Manifold.l
+        """
         return self.ubasis @ embedding
 
 
@@ -56,7 +58,7 @@ class Manifold():
         :param k: number of nearest neighbors
         """
         self.k = k
-        self.fit_method = ManifoldApproximators(method)
+        self.fit_method = ManifoldMethods(method)
         self.kwargs = kwargs
 
     def fit(self, data: torch.Tensor, intrinsic_params: torch.Tensor = None):
@@ -67,7 +69,7 @@ class Manifold():
         t0 = time.time()
         ret0 = self.fit_method(self.data, self.k, **self.kwargs) #cidm(self.data, )  # k=k, k2=k2, nvars=4*k)
         t1 = time.time()
-        print(f'Time for manifold fit: {t1 - t0:.2f}s')
+        print(f'Time taken to fit manifold: {t1 - t0:.2f}s')
         self.u, self.l, self.peq, self.qest, self.eps, self.dim, self.KP = ret0
 
         self.Xhat = self.u.T @ torch.diag(self.peq) @ self.data.view(self.data.shape[0], -1).to(self.u)
@@ -81,7 +83,7 @@ class Manifold():
         """ Map an abritrary point onto the manfifold and return your desired embedding, default is ambient
         :param x: batched points, a tensor is assumed to be in ambient
         :param embedding: either a string specifying the embedding label, options are 'ambient', 'intrinsic',
-            'ubasis', or a linear map of your choice
+            'ubasis', or a linear map of your choice first dimension of len(self.KP.l)
         :return: a point in the embedding you chose, will be a list of points if embedding is a list
         """
 
@@ -100,7 +102,7 @@ class Manifold():
             if isinstance(emb, torch.Tensor):
                 ret.append(points.embed(emb))
             elif emb.lower().startswith('a'):
-                ret.append(points.embed(self.Xhat))
+                ret.append(points.embed(self.Xhat).reshape((-1, *self.KP.X.shape[1:])))
             elif emb.lower().startswith('i'):
                 ret.append(points.embed(self.Shat))
             elif emb.lower().startswith('u'):
@@ -111,21 +113,52 @@ class Manifold():
 
     def map_to_manifold(self, x: torch.Tensor):
         """ Map an arbitrary point to the manifold in the manifold basis (Nystrom)
+        The point of the ManifoldPoints class is expose this layer of the code so that it can be stored for later use
+        if desired because it can be prohibitively expensive to compute
         :param x: batched tensor of points in ambient dimension
         :return: ManifoldPoint
         """
-        return ManifoldPoints(nystrom(x, self.KP))
+        return ManifoldPoints(nystrom(x, self.KP)[0])
 
 
 class SEC():
-    def __init__(self, manifold: Manifold, basis_size: int = None):
-        self.manifold = manifold
+    """ Class that finds SEC objects for a manifold and can get tangents on that manifold
+    """
+    def __init__(self, basis_size: int = None):
+        self.n1 = basis_size
 
-    def fit(self):
-        self.n1 = min(80, self.KP.k)  # use kNN size capped at 80
+    def fit(self, manifold: Manifold):
+        self.manifold = manifold
+        if self.n1 is None:
+            self.n1 = min(80, self.manifold.KP.k)
         t2 = time.time()
-        ret1 = del1_as_einsum(self.u, self.l, torch.diag(self.peq), self.n1)
+        ret1 = del1_as_einsum(self.manifold.u, self.manifold.l, torch.diag(self.manifold.peq), self.n1)
         t3 = time.time()
-        print(f'Time for Del1: {t3 - t2:.2f}s')
+        print(f'Time taken calculating SEC: {t3 - t2:.2f}s')
         self.u1, self.l1, self.d1, _, self.h1, _ = ret1
 
+        return self
+
+    def tangent_basis(self, idxs: List, embedding: str = 'ambient'):
+        """ return the tangent basis for all points on the manifold
+        @TODO: also implement for ManifoldPoints, not just manifold.KP.X
+        @TODO: use arbitrary embedding
+        :param idxs: list of which SEC eigenforms you want the vectorfields for
+        """
+        usize = len(idxs)
+        umatrices = torch.permute(self.h1.t() @ self.u1[:, :usize], [1, 0])
+        umatrices = umatrices.reshape((usize, self.n1, self.n1)).transpose(1, 2)
+
+        if embedding.lower().startswith('a'):
+            vectorfields = torch.tensordot(
+                self.manifold.u[:, :self.n1],
+                umatrices @ self.manifold.Xhat[:self.n1],
+                dims=[[-1], [-2]])
+        elif embedding.lower().startswith('u'):
+            vectorfields = torch.tensordot(
+                self.manifold.u[:, :self.n1], umatrices,
+                dims=[[-1], [-2]])
+        else:
+            raise NotImplementedError
+
+        return vectorfields

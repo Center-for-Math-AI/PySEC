@@ -89,3 +89,19 @@ def laplacian_eig_truth(n):
     ret = torch.arange(1, (n + 2) // 2, dtype=float) ** 2
     ret = torch.stack((ret, ret), dim=1).view(-1)
     return torch.cat((torch.zeros(1), ret))[:n]
+
+def klein_bottle_3d(u, v):
+    """
+    http://paulbourke.net/geometry/klein/
+    :param u,v: meshgrids
+    """
+    pi = torch.pi
+    half = (0 <= u) & (u < pi)
+    r = 4*(1 - torch.cos(u)/2)
+    x = 6*torch.cos(u)*(1 + torch.sin(u)) + r*torch.cos(v + pi)
+    x[half] = (
+        (6*torch.cos(u)*(1 + torch.sin(u)) + r*torch.cos(u)*torch.cos(v))[half])
+    y = 16 * torch.sin(u)
+    y[half] = (16*torch.sin(u) + r*torch.sin(u)*torch.cos(v))[half]
+    z = r * torch.sin(v)
+    return x, y, z
