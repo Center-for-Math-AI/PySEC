@@ -4,7 +4,7 @@ import numpy as np
 from math import ceil
 import matplotlib.pyplot as plt
 from PySEC import generate_data as gd
-from PySEC.nystrom_cidm import cidm, nystrom, nystrom_grad
+from PySEC.nystrom_cidm import cidm, nystrom #, nystrom_grad
 from PySEC.del1 import del1_as_einsum
 from PySEC.sec_utils import reshape_fortran
 
@@ -44,8 +44,8 @@ ax.set_xticks([]), ax.set_yticks([])
 ax.set_xlabel(r'$\phi_1$'), ax.set_ylabel(r'$\phi_2$')
 plt.show(), plt.close(fig)
 
-Xhat = u0[:, :50].t() @ (data * peq0[:, None])
-xrecon = u0[:, :50] @ Xhat
+Xhat = u0[:, :12].t() @ (data * peq0[:, None])
+xrecon = u0[:, :12] @ Xhat
 
 fig = plt.figure()
 ax = fig.add_subplot(1, 1, 1, projection='3d')

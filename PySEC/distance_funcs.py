@@ -1,7 +1,5 @@
 import torch
 from tqdm import tqdm, trange
-from torchmetrics.functional import structural_similarity_index_measure
-from kornia.geometry.transform import build_laplacian_pyramid as blp
 
 
 """
@@ -38,9 +36,11 @@ class DistanceMetric:
         return torch.linalg.norm((x - y).view(x.shape[0], -1), ord=2, dim=1)
 
     def ssim(self, x, y, **kwargs):
+        from torchmetrics.functional import structural_similarity_index_measure
         return 1. - structural_similarity_index_measure(x, y, reduction='none', **kwargs)
 
     def lap1(self, x, y, level_weights=None):
+        from kornia.geometry.transform import build_laplacian_pyramid as blp
 
         max_level = int(torch.ceil(torch.log2(torch.as_tensor(min(x.shape[-1], x.shape[-2])) / 8)))
         xlp = blp(x, max_level=max_level, border_type='reflect', align_corners=False)

@@ -5,6 +5,11 @@ import matplotlib.pyplot as plt
 from PySEC import generate_data as gd
 from PySEC.approximators import Manifold, SEC
 
+web_plot = False
+if web_plot:
+    import matplotlib
+    matplotlib.use('WebAgg')
+
 torch.backends.cudnn.deterministic = True  #
 torch.manual_seed(0)
 
@@ -15,10 +20,10 @@ x, y, z = gd.klein_bottle_3d(torch.as_tensor(ux), torch.as_tensor(vx))
 print(f'Size of 3d mesh: {3 * x.nelement() * x.element_size() / 2**20:.2f} MB')
 
 t0 = time.time()
-num_images = 127
+num_images = 181
 # generate images of the klein bottle from different views
 images = np.empty((num_images, 100, 100, 3), dtype=np.uint8)
-intrinsic_params = np.empty((num_images, 1), dtype=np.float)
+intrinsic_params = np.empty((num_images, 1), dtype=float)
 for ii, az in enumerate(np.linspace(0., 360., num_images, endpoint=False)):
     fig = plt.figure(figsize=(1, 1))
     ax = fig.add_subplot(1, 1, 1, projection='3d')
@@ -35,7 +40,8 @@ for ii, az in enumerate(np.linspace(0., 360., num_images, endpoint=False)):
     plt.close(fig)
 
 t1 = time.time()
-print(f'Time to generate images: {t1-t0:.2f}s')
+shape_str = 'x'.join([str(s) for s in images[0].shape])
+print(f'Time to generate {len(images)} images with shape {shape_str}: {t1-t0:.2f}s')
 
 
 # look at some of the images
@@ -48,8 +54,8 @@ for ii, ax in enumerate(aax.flat):
 
 fig.suptitle('Samples of dataset images for building a manifold')
 fig.tight_layout()
-plt.show(), plt.close(fig)
-
+# plt.show(), plt.close(fig)
+fig.show()
 
 data = torch.as_tensor(images, dtype=torch.float)
 ip = torch.as_tensor(intrinsic_params, dtype=torch.float32)
@@ -79,7 +85,8 @@ for ii, plot_vecs in enumerate(plot_vec_list):
 
 fig.suptitle('Manifold in diffusion coordinates, colored by view angle')
 fig.tight_layout()
-plt.show(), plt.close(fig)
+# plt.show(), plt.close(fig)
+fig.show()
 
 
 # now noise some dataset images and map them back to the manifold
@@ -107,7 +114,8 @@ for ii, idx in enumerate(idxs):
 
 fig.suptitle(f'Noisy image reconstruction on manifold @ {noise_level:.2f} std dev noise')
 fig.tight_layout()
-plt.show()
+# plt.show()
+fig.show()
 
 
 # now compute SEC for the manifold
@@ -123,15 +131,17 @@ for uvec in range(4):
     ax = fig.add_subplot(2, 2, 1 + uvec, projection='3d')
     sax = ax.scatter(*geom_man.u[tan_ss, plot_vecs].t().cpu(), c='gray', alpha=0.6, s=5)
     ax.view_init(view_dl, view_az), ax.set_xticklabels([]), ax.set_yticklabels([]), ax.set_zticklabels([])
-    tan_len_fac = 1.e0 / torch.linalg.norm(vectorfield).item()
+    tan_len_fac = 1.e0 / torch.linalg.norm(vectorfields[:, 0]).item()
     tax = ax.quiver(*geom_man.u[tan_ss, plot_vecs].t().cpu(), *vectorfield[tan_ss, plot_vecs].t().cpu(),
-                    length=2 * tan_len_fac, normalize=False, color='red', arrow_length_ratio=0.4, alpha=0.6, )
-    ax.set_title(r'|$\Delta_1$' + f' Tan({uvec})|: {torch.linalg.norm(vectorfield):.2e}')
+                    length = 2 * tan_len_fac, normalize = False, color = 'red', arrow_length_ratio = 0.4, alpha = 0.6, )
+    # ax.set_title(r'|$\Delta_1$' + f' Tan({uvec})|: {torch.linalg.norm(vectorfield):.2e}')
+    ax.set_title(r'|$\Delta_1$' + f' Tan({uvec})|: {geom_sec.l1[uvec]:.2f}')
     ax.set_xlabel(f'U{plot_vecs[0]}', labelpad=-6), ax.set_ylabel(f'U{plot_vecs[1]}', labelpad=-6), ax.set_zlabel(
         f'U{plot_vecs[2]}', labelpad=-6)
 
 fig.suptitle('SEC vectorfields')
 fig.tight_layout()
-plt.show(), plt.close(fig)
+# plt.show(), plt.close(fig)
+fig.show()
 
 debug_var = 1

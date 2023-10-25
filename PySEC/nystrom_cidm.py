@@ -41,7 +41,58 @@ class DiffusionKernelData:
 
 
 def cidm(x, nvars=None, k=None, k2=None, tuning_method=None, **knn_args):
+    """ Compute conformally invariant diffusion maps on data
 
+    Parameters
+    ----------
+    x: array_like or tensor_like
+        data to fit, array of shape (n_samples, ...)
+
+    nvars: int (optional, default=None)
+        how many eigenfunctions to use, default is 2 * k
+
+    k: int (optional, default=None)
+        number of nearest neigbhors to include in the raph Laplacian, the
+        default is ceil(log(n_samples))
+
+    k2: int (optional, default=None)
+        number of nearest neighbors to use for the local density estimate,
+        the default is ceil(log(n_samples))
+
+    tuning_method: str (optional, default=None)
+        NotImplemented, would specify how to choose bandwidth
+
+    **knn_args: dict
+        kwargs to pass to the kNN finding function, such as specifying a
+        distance metric
+
+    Returns
+    -------
+    u: Tensor
+        eigenfunctions of the graph Laplacian, shape (nvars, n_samples)
+
+    l: Tensor
+        eigenvalues of the graph Laplacian, shape (nvars)
+
+    peq: Tensor
+        invariant measure of the diffusion process extended to the data
+
+    qest: Tensor
+        sampling measure extended to the data
+
+    epsilon: float
+        bandwidth used in the kernel
+
+    dim: float
+        estimated dimension of the data
+
+    KP: DiffusionKernelData
+        dataclass used to store everything about the manifold
+
+    See Also
+    --------
+    - PySEC.del0 : fixed-bandwidth diffusion map
+    """
     # @TODO: provide ability to pass in knn data, so a user can do arbitrary metrics (for intrinsic)
 
     N, n = x.shape[0], x.shape[1]
