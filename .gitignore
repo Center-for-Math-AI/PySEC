@@ -9,3 +9,5 @@ __pycache__/
 # IDE specific files
 .idea
 
+# built sphinx
+docs/build
