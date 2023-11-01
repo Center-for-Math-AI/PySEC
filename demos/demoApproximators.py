@@ -18,7 +18,7 @@ t0 = time.time()
 num_images = 127
 # generate images of the klein bottle from different views
 images = np.empty((num_images, 100, 100, 3), dtype=np.uint8)
-intrinsic_params = np.empty((num_images, 1), dtype=np.float)
+intrinsic_params = np.empty((num_images, 1), dtype=float)
 for ii, az in enumerate(np.linspace(0., 360., num_images, endpoint=False)):
     fig = plt.figure(figsize=(1, 1))
     ax = fig.add_subplot(1, 1, 1, projection='3d')
